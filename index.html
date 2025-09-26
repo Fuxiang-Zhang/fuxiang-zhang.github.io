@@ -39,9 +39,39 @@
         font-size: 2.2em;
     }
     h2 {
-      border-bottom: 2px solid #ecf0f1;
-      padding-bottom: 10px;
-      margin-top: 30px;
+      margin: 42px 0 22px;
+      font-size: 1.9em;
+      font-weight: 700;
+      color: #1c2e46;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      letter-spacing: 0.01em;
+    }
+    h2::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(41, 128, 185, 0.4), rgba(41, 128, 185, 0));
+      border-radius: 1px;
+    }
+    h3 {
+      position: relative;
+      margin: 34px 0 18px;
+      font-size: 1.28em;
+      font-weight: 600;
+      color: #1f3d5e;
+      letter-spacing: 0.03em;
+    }
+    h3::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: -10px;
+      width: 64px;
+      height: 3px;
+      background: linear-gradient(90deg, #2980b9, #6bc4ff);
+      border-radius: 2px;
     }
     a {
       color: #2980b9;
@@ -81,119 +111,187 @@
 </head>
 <body>
 
-  <div class="container">
-    <div class="left-panel">
-      <img src="assets/Photo.JPG" alt="Fuxiang Zhang" class="profile-pic"/>
-      <h1>Fuxiang Zhang</h1>
-      
-      <div class="links">
-        <p><a href="mailto:zfx.agi@gmail.com">Email</a></p>
-        <p><a href="https://github.com/mansicer">GitHub</a></p>
-        <p><a href="https://scholar.google.com/citations?user=GZRrWXAAAAAJ">Google Scholar</a></p>
-        <p><a href="https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/">Linkedin</a></p>
-      </div>
-    </div>
-
-    <div class="right-panel">
-      <h2>About Me</h2>
-      <p>
-        I am a Ph.D. candidate at the College of Computing and Data Science, <a href="https://www.ntu.edu.sg/">Nanyang Technological University</a>, starting from January 2025, advised by Prof. <a href="https://personal.ntu.edu.sg/boan">Bo An</a>. I am part of an industrial post-graduate program (IPP) with <a href="https://skywork.ai">Skywork AI</a>.
-      </p>
-      <p>
-        I obtained my Master's and Bachelor's degrees from Nanjing University. During my time at Nanjing University, I was a member of the <a href="http://www.lamda.nju.edu.cn/MainPage.ashx">LAMDA</a> group, in a reinforcement learning team led by Prof. <a href="https://www.lamda.nju.edu.cn/zhangzz/">Zongzhang Zhang</a>.
-      </p>
-
-      <h2>Research Interests</h2>
-      <p>My current research focuses on the integration of large language models (LLMs) with reinforcement learning (RL). I also have extensive experience in multi-agent reinforcement learning (MARL) and model-based RL.</p>
-
-      <h2>Publications</h2>
-      <div class="publication-item">
-        <h5>Incentivizing LLMs to Self-Verify Their Answers</h5>
-        <p>
-            <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Chaojie Wang, Ce Cui, Yang Liu, Bo An<br>
-            <em>Conference on Neural Information Processing Systems (NeurIPS)</em>, 2025<br>
-            <span class="links"><a href="https://arxiv.org/abs/2506.01369">[Paper]</a> <a href="https://github.com/mansicer/self-verification">[Code]</a></span>
-        </p>
-      </div>
-      <div class="publication-item">
-        <h5>Improving Sample Efficiency of Reinforcement Learning with Background Knowledge from Large Language Models</h5>
-        <p>
-            <strong>Fuxiang Zhang</strong>, Junyou Li, Yi-Chen Li, Zongzhang Zhang, Yang Yu, Deheng Ye<br>
-            <em>IEEE Transactions on Neural Networks and Learning Systems (TNNLS)</em>, 2025<br>
-            <span class="links"><a href="https://arxiv.org/abs/2407.03964">[Paper]</a> <a href="https://github.com/mansicer/background-knowledge-rl">[Code]</a></span>
-        </p>
-      </div>
-      <div class="publication-item">
-        <h5>Q-Adapter: Customizing Pre-trained LLMs to New Preferences with Forgetting Mitigation</h5>
-        <p>
-            Yi-Chen Li*, <strong>Fuxiang Zhang*</strong>, Wenjie Qiu, Lei Yuan, Chengxing Jia, Zongzhang Zhang, Yang Yu, Bo An<br>
-            <em>International Conference on Learning Representations (ICLR)</em>, 2025<br>
-            <span class="links"><a href="https://arxiv.org/abs/2407.03856">[Paper]</a> <a href="https://github.com/mansicer/Q-Adapter">[Code]</a></span>
-        </p>
-      </div>
-      <div class="publication-item">
-        <h5>Multiagent Continual Coordination via Progressive Task Contextualization</h5>
-        <p>
-            Lei Yuan, Lihe Li, Ziqian Zhang, <strong>Fuxiang Zhang</strong>, Cong Guan, Yang Yu<br>
-            <em>IEEE Transactions on Neural Networks and Learning Systems (TNNLS)</em>, 2025<br>
-            <span class="links"><a href="https://arxiv.org/abs/2305.13937">[Paper]</a> <a href="https://github.com/lilh76/MACPro">[Code]</a></span>
-        </p>
-      </div>
-      <div class="publication-item">
-        <h5>Discovering Generalizable Multi-agent Coordination Skills from Multi-task Offline Data</h5>
-        <p>
-            <strong>Fuxiang Zhang*</strong>, Chengxing Jia*, Yi-Chen Li, Lei Yuan, Yang Yu, Zongzhang Zhang<br>
-            <em>International Conference on Learning Representations (ICLR)</em>, 2023<br>
-            <span class="links"><a href="https://openreview.net/pdf?id=53FyUAdP7d">[Paper]</a> <a href="https://github.com/LAMDA-RL/ODIS">[Code]</a></span>
-        </p>
-      </div>
-       <div class="publication-item">
-        <h5>Multi-Agent Incentive Communication via Decentralized Teammate Modeling</h5>
-        <p>
-            Lei Yuan*, Jianhao Wang*, <strong>Fuxiang Zhang*</strong>, Chenghe Wang, Zongzhang Zhang, Yang Yu, and Chongjie Zhang<br>
-            <em>AAAI Conference on Artificial Intelligence (AAAI)</em>, 2022<br>
-            <span class="links"><a href="https://cdn.aaai.org/ojs/21179/21179-13-25192-1-2-20220628.pdf">[Paper]</a> <a href="https://github.com/mansicer/MAIC">[Code]</a></span>
-        </p>
-      </div>
-      <div class="publication-item">
-        <h5>Generalizable Multi-Modal Adversarial Imitation Learning for Non-Stationary Dynamics</h5>
-          <p>
-            Yi-Chen Li, Ningjing Chao, Zongzhang Zhang, <strong>Fuxiang Zhang</strong>, Lei Yuan, Yang Yu<br>
-            <em>IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)</em>, 2025<br>
-            <span class="links"><a href="https://ieeexplore.ieee.org/document/10930709">[Paper]</a> <a href="https://github.com/LAMDA-RL/GMAIL">[Code]</a></span>
-          </p>
-      </div>
-      <div class="publication-item">
-        <h5>Disentangling Policy from Offline Task Representation Learning via Adversarial Data Augmentation</h5>
-          <p>
-            Chengxing Jia*, <strong>Fuxiang Zhang*</strong>, Yi-Chen Li, Chenxiao Gao, Xu-Hui Liu, Lei Yuan, Zongzhang Zhang, and Yang Yu<br>
-            <em>International Conference on Autonomous Agents and Multiagent Systems (AAMAS)</em>, 2024<br>
-            <span class="links"><a href="https://arxiv.org/abs/2403.07261">[Paper]</a> <a href="https://github.com/LAMDA-RL/ReDA">[Code]</a></span>
-          </p>
-      </div>
-      <div class="publication-item">
-        <h5>Model Gradient: Unified Model and Policy Learning in Model-based Reinforcement Learning</h5>
-          <p>
-            Chengxing Jia*, <strong>Fuxiang Zhang*</strong>, Tian Xu, Jing-Cheng Pang, Zongzhang Zhang, and Yang Yu<br>
-            <em>Frontiers of Computer Science</em>, 2024<br>
-            <span class="links"><a href="https://link.springer.com/article/10.1007/s11704-023-3150-5">[Paper]</a></span>
-          </p>
-      </div>
-      <div class="publication-item">
-        <h5>Policy Regularization with Dataset Constraint for Offline Reinforcement Learning</h5>
-          <p>
-            Yuhang Ran*, Yi-Chen Li*, <strong>Fuxiang Zhang</strong>, Zongzhang Zhang, and Yang Yu<br>
-            <em>International Conference on Machine Learning (ICML)</em>, 2023<br>
-            <span class="links"><a href="https://arxiv.org/abs/2306.06569">[Paper]</a> <a href="https://github.com/LAMDA-RL/PRDC">[Code]</a></span>
-          </p>
-      </div>
-      <p><em>* denotes equal contribution</em></p>
+<div class="container">
+  <div class="left-panel">
+    <img src="assets/Photo.JPG" alt="Fuxiang Zhang" class="profile-pic"/>
+    <h1>Fuxiang Zhang</h1>
+    
+    <div class="links">
+      <p><a href="mailto:zfx.agi@gmail.com">Email</a></p>
+      <p><a href="https://github.com/mansicer">GitHub</a></p>
+      <p><a href="https://scholar.google.com/citations?user=GZRrWXAAAAAJ">Google Scholar</a></p>
+      <p><a href="https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/">Linkedin</a></p>
     </div>
   </div>
 
-  <footer>
-      <p style="text-align: center; margin-top: 30px; color: #777;">&copy; 2025 Fuxiang Zhang</p>
-  </footer>
+<div class="right-panel">
+<h2>About Me</h2>
+<p>
+  I am a Ph.D. candidate at the College of Computing and Data Science, <a href="https://www.ntu.edu.sg/">Nanyang Technological University</a>, starting from January 2025, advised by Prof. <a href="https://personal.ntu.edu.sg/boan">Bo An</a>. I am part of an industrial post-graduate program (IPP) with <a href="https://skywork.ai">Skywork AI</a>.
+</p>
+<p>
+  I obtained my Master's and Bachelor's degrees from Nanjing University. During my time at Nanjing University, I was a member of the <a href="http://www.lamda.nju.edu.cn/MainPage.ashx">LAMDA</a> group, in a reinforcement learning team led by Prof. <a href="https://www.lamda.nju.edu.cn/zhangzz/">Zongzhang Zhang</a>.
+</p>
+
+<h2>Research Interests</h2>
+<p><em>Large Language Models, Reinforcement Learning, Multi-Agent Reinforcement Learning</em></p>
+
+<h2>Publications</h2>
+
+<h3>Journal Papers</h3>
+<div class="publication-item">
+  <h5>Improving Sample Efficiency of Reinforcement Learning with Background Knowledge from Large Language Models</h5>
+  <p>
+    <strong>Fuxiang Zhang</strong>, Junyou Li, Yi-Chen Li, Zongzhang Zhang, Yang Yu, Deheng Ye<br>
+    <em>IEEE Transactions on Neural Networks and Learning Systems (TNNLS)</em>, 2025<br>
+    <span class="links"><a href="https://arxiv.org/abs/2407.03964">[Paper]</a> <a href="https://github.com/mansicer/background-knowledge-rl">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Generalizable Multi-Modal Adversarial Imitation Learning for Non-Stationary Dynamics</h5>
+  <p>
+    Yi-Chen Li, Ningjing Chao, Zongzhang Zhang, <strong>Fuxiang Zhang</strong>, Lei Yuan, Yang Yu<br>
+    <em>IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)</em>, 2025<br>
+    <span class="links"><a href="https://ieeexplore.ieee.org/document/10930709">[Paper]</a> <a href="https://github.com/LAMDA-RL/GMAIL">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Multiagent Continual Coordination via Progressive Task Contextualization</h5>
+  <p>
+    Lei Yuan, Lihe Li, Ziqian Zhang, <strong>Fuxiang Zhang</strong>, Cong Guan, Yang Yu<br>
+    <em>IEEE Transactions on Neural Networks and Learning Systems (TNNLS)</em>, 2025<br>
+    <span class="links"><a href="https://arxiv.org/abs/2305.13937">[Paper]</a> <a href="https://github.com/lilh76/MACPro">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Model Gradient: Unified Model and Policy Learning in Model-based Reinforcement Learning</h5>
+  <p>
+    Chengxing Jia*, <strong>Fuxiang Zhang*</strong>, Tian Xu, Jing-Cheng Pang, Zongzhang Zhang, and Yang Yu<br>
+    <em>Frontiers of Computer Science</em>, 2024<br>
+    <span class="links"><a href="https://link.springer.com/article/10.1007/s11704-023-3150-5">[Paper]</a></span>
+  </p>
+</div>
+
+<h3>Conference Papers</h3>
+<div class="publication-item">
+  <h5>Incentivizing LLMs to Self-Verify Their Answers</h5>
+  <p>
+    <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Chaojie Wang, Ce Cui, Yang Liu, Bo An<br>
+    <em>Conference on Neural Information Processing Systems (NeurIPS)</em>, 2025<br>
+    <span class="links"><a href="https://arxiv.org/abs/2506.01369">[Paper]</a> <a href="https://github.com/mansicer/self-verification">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Q-Adapter: Customizing Pre-trained LLMs to New Preferences with Forgetting Mitigation</h5>
+  <p>
+    Yi-Chen Li*, <strong>Fuxiang Zhang*</strong>, Wenjie Qiu, Lei Yuan, Chengxing Jia, Zongzhang Zhang, Yang Yu, Bo An<br>
+    <em>International Conference on Learning Representations (ICLR)</em>, 2025<br>
+    <span class="links"><a href="https://arxiv.org/abs/2407.03856">[Paper]</a> <a href="https://github.com/mansicer/Q-Adapter">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Disentangling Policy from Offline Task Representation Learning via Adversarial Data Augmentation</h5>
+  <p>
+    Chengxing Jia*, <strong>Fuxiang Zhang*</strong>, Yi-Chen Li, Chenxiao Gao, Xu-Hui Liu, Lei Yuan, Zongzhang Zhang, and Yang Yu<br>
+    <em>International Conference on Autonomous Agents and Multiagent Systems (AAMAS)</em>, 2024<br>
+    <span class="links"><a href="https://arxiv.org/abs/2403.07261">[Paper]</a> <a href="https://github.com/LAMDA-RL/ReDA">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Policy Rehearsing: Training Generalizable Policies for Reinforcement Learning</h5>
+  <p>
+    Chengxing Jia, Chenxiao Gao, Hao Yin, <strong>Fuxiang Zhang</strong>, Xiyao Chen, Tian Xu, Lei Yuan, Zongzhang Zhang, Zhi-Hua Zhou<br>
+    <em>International Conference on Learning Representations (ICLR)</em>, 2024<br>
+    <span class="links"><a href="https://openreview.net/pdf?id=m3xVPaZp6Z">[Paper]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Internal Logical Induction for Pixel-Symbolic Reinforcement Learning</h5>
+  <p>
+    Jiacheng Xu, Chao Chen, <strong>Fuxiang Zhang</strong>, Lei Yuan, Zongzhang Zhang, Yang Yu<br>
+    <em>ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD)</em>, 2023<br>
+    <span class="links"><a href="https://dl.acm.org/doi/10.1145/3580305.3599393">[Paper]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Policy Regularization with Dataset Constraint for Offline Reinforcement Learning</h5>
+  <p>
+    Yuhang Ran*, Yi-Chen Li*, <strong>Fuxiang Zhang</strong>, Zongzhang Zhang, and Yang Yu<br>
+    <em>International Conference on Machine Learning (ICML)</em>, 2023<br>
+    <span class="links"><a href="https://arxiv.org/abs/2306.06569">[Paper]</a> <a href="https://github.com/LAMDA-RL/PRDC">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Discovering Generalizable Multi-agent Coordination Skills from Multi-task Offline Data</h5>
+  <p>
+    <strong>Fuxiang Zhang*</strong>, Chengxing Jia*, Yi-Chen Li, Lei Yuan, Yang Yu, Zongzhang Zhang<br>
+    <em>International Conference on Learning Representations (ICLR)</em>, 2023<br>
+    <span class="links"><a href="https://openreview.net/pdf?id=53FyUAdP7d">[Paper]</a> <a href="https://github.com/LAMDA-RL/ODIS">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Multi-Agent Concentrative Coordination with Decentralized Task Representation</h5>
+  <p>
+    Lei Yuan, Chenghe Wang, Jianhao Wang, <strong>Fuxiang Zhang</strong>, Feng Chen, Cong Guan, Zongzhang Zhang, Chongjie Zhang, Yang Yu<br>
+    <em>International Joint Conference on Artificial Intelligence (IJCAI)</em>, 2022<br>
+    <span class="links"><a href="https://www.ijcai.org/proceedings/2022/0085.pdf">[Paper]</a> <a href="https://github.com/DrZero0/MACC">[Code]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Towards Deployment-Efficient and Collision-Free Multi-Agent Path Finding (Student Abstract)</h5>
+  <p>
+    Feng Chen, Chenghe Wang, <strong>Fuxiang Zhang</strong>, Haotian Ding, Qiyu Zhong, Shi Pu, Zongzhang Zhang<br>
+    <em>AAAI Conference on Artificial Intelligence (AAAI), Student Abstract</em>, 2023<br>
+    <span class="links"><a href="https://ojs.aaai.org/index.php/AAAI/article/view/26951/26723&ved=2ahUKEwifk-qf5_aPAxUuzzgGHU3fK4QQFnoECBsQAQ&usg=AOvVaw2x8XqbOXf0TZWFq6JpS7ST">[Paper]</a></span>
+  </p>
+</div>
+
+<div class="publication-item">
+  <h5>Multi-Agent Incentive Communication via Decentralized Teammate Modeling</h5>
+  <p>
+    Lei Yuan*, Jianhao Wang*, <strong>Fuxiang Zhang*</strong>, Chenghe Wang, Zongzhang Zhang, Yang Yu, and Chongjie Zhang<br>
+    <em>AAAI Conference on Artificial Intelligence (AAAI)</em>, 2022<br>
+    <span class="links"><a href="https://cdn.aaai.org/ojs/21179/21179-13-25192-1-2-20220628.pdf">[Paper]</a> <a href="https://github.com/mansicer/MAIC">[Code]</a></span>
+  </p>
+</div>
+
+<h3>Preprint Manuscripts</h3>
+  <div class="publication-item">
+    <h5>Skywork Open Reasoner 1 Technical Report</h5>
+    <p>
+      Jujie He, Jiacai Liu, Chris Yuhao Liu, Rui Yan, Chaojie Wang, Peng Cheng, Xiaoyu Zhang, <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Wei Shen, Siyuan Li, Liang Zeng, Tianwen Wei, Cheng Cheng, Bo An, Yang Liu, Yahui Zhou<br>
+      <em>arXiv preprint</em>, 2025<br>
+      <span class="links"><a href="https://arxiv.org/abs/2505.22312">[Paper]</a></span>
+    </p>
+  </div>
+
+  <div class="publication-item">
+    <h5>Skywork-Reward-V2: Scaling Preference Data Curation via Human-AI Synergy</h5>
+    <p>
+      Chris Yuhao Liu, Liang Zeng, Yuzhen Xiao, Jujie He, Jiacai Liu, Chaojie Wang, Rui Yan, Wei Shen, <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Yang Liu, Yahui Zhou<br>
+      <em>Tech Report</em>, 2025<br>
+      <span class="links"><a href="https://arxiv.org/abs/2507.01352">[Paper]</a> <a href="https://github.com/SkyworkAI/Skywork-Reward-V2">[Code]</a></span>
+    </p>
+  </div>
+
+<p><em>* denotes equal contribution</em></p>
+</div>
+</div>
+
+<footer>
+    <p style="text-align: center; margin-top: 30px; color: #777;">&copy; 2025 Fuxiang Zhang</p>
+</footer>
 
 </body>
 </html>
