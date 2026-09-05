@@ -91,3 +91,43 @@ test('shared content keeps Work separate and validates publication inputs', asyn
   }
   for (const invalid of [null, {}, [{ id:'incomplete' }]]) assert.throws(() => parsePublications(invalid));
 });
+
+test('static service discovers new assets and confines paths and symlinks to its public root', async t => {
+  const { mkdtemp, mkdir, writeFile, symlink, rm } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const fixture = await mkdtemp(join(tmpdir(), 'fuxiang-static-'));
+  const publicRoot = join(fixture, 'public');
+  await mkdir(join(publicRoot, 'assets'), { recursive: true });
+  await mkdir(join(publicRoot, 'guide'));
+  await mkdir(join(publicRoot, 'escape'));
+  await writeFile(join(publicRoot, 'assets/new file.pdf'), 'New PDF');
+  await writeFile(join(publicRoot, 'guide/index.html'), '<h1>Guide</h1>');
+  await writeFile(join(fixture, 'private.txt'), 'private');
+  await symlink(join(fixture, 'private.txt'), join(publicRoot, 'leak.txt'));
+  await symlink(fixture, join(publicRoot, 'outside'), 'dir');
+  await symlink(join(fixture, 'private.txt'), join(publicRoot, 'escape/index.html'));
+  const server = createServer(publicRoot).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await rm(fixture, { recursive: true, force: true });
+  });
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const pdf = await fetch(`${origin}/assets/new%20file.pdf`);
+  assert.equal(pdf.headers.get('Content-Type'), 'application/pdf');
+  assert.equal(await pdf.text(), 'New PDF');
+  const head = await fetch(`${origin}/assets/new%20file.pdf`, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get('Content-Length'), '7');
+  assert.equal(await head.text(), '');
+  const redirect = await fetch(`${origin}/guide?view=all`, { redirect: 'manual' });
+  assert.equal(redirect.status, 308);
+  assert.equal(redirect.headers.get('Location'), '/guide/?view=all');
+  assert.equal(await fetch(`${origin}/guide/`).then(response => response.text()), '<h1>Guide</h1>');
+  for (const path of ['/..%2fprivate.txt', '/%2e%2e%2fprivate.txt', '/leak.txt', '/outside/private.txt', '/escape/', '/%00', '/..%5cprivate.txt']) {
+    assert.equal((await fetch(origin + path)).status, 404, path);
+  }
+  assert.equal((await fetch(`${origin}/%E0%A4%A`)).status, 400);
+});

@@ -23,17 +23,21 @@ npm start      # 构建并启动服务，不监听文件变化
 
 | 文件 | 用途 |
 | --- | --- |
-| `src/app.ts` | 导航、页面交互和对话状态 |
+| `src/app.ts` | DOM 更新、事件与聊天请求调度 |
+| `src/state.ts` | 会话、草稿、论文返回来源和筛选逻辑 |
 | `src/content.ts` | 中英文文案、教育、工作、学术服务和奖励 |
-| `src/render.ts` | 共用的 HTML 渲染与转义 |
+| `src/render.ts` | 页面、导航、消息、论文详情和阅读版的纯 HTML 渲染 |
 | `src/chat.ts` | 前后端共用的模拟回复及请求接口 |
 | `src/config.ts` | 聊天后端地址与主页统计配置 |
 | `src/types.ts` | 数据类型和论文数据校验 |
 | `data/publications.json` | 完整论文数据 |
 | `server.ts` | 静态文件服务与 `POST /api/chat` |
-| `scripts/` | 构建和开发监听 |
+| `scripts/build.mjs` | 启动 TS 编译，成功后替换构建输出 |
+| `scripts/build.ts` / `scripts/dev.ts` | 静态导出 / 开发监听 |
 
-五个 tab：Overview → Research → Work → Publication → Miscellaneous。各自保留本次访问的输入和对话；刷新后清空消息。只有语言和主题偏好写入本机存储。阅读版由同一份内容自动生成。
+五个 tab：Overview → Research → Work → Publication → Miscellaneous。各自保留本次访问的输入和对话；刷新后清空消息。只有语言和主题偏好写入本机存储。阅读版由同一份内容自动生成。论文详情保留打开时的 tab、草稿、筛选和滚动位置；直接访问论文链接时以 Publication 为背景。重试失败回复保留尚未发送的新草稿。
+
+测试覆盖草稿重试、论文路由与返回、双语渲染、组合筛选、构建失败保留输出，以及静态服务的路径和符号链接边界。
 
 ## 构建与 GitHub Pages
 
@@ -41,7 +45,7 @@ npm start      # 构建并启动服务，不监听文件变化
 npm run build
 ```
 
-TypeScript 编译到 `.build/`，公开文件输出到 `dist/`。现有 GitHub Actions 会安装锁定的依赖、检查、测试，并将 `dist/` 部署到 GitHub Pages。无需提交生成的 JavaScript 或阅读版文件。
+构建先在独立临时目录完成 TS 编译、内容校验和静态导出，全部成功后再替换 `.build/` 与 `dist/`。删除或重命名的源码不会遗留旧 JS；失败时保留上一版预览。静态服务仅访问 `dist/` 内的文件，新增资源无需登记文件名。现有 GitHub Actions 会安装锁定的依赖、检查、测试，并将 `dist/` 部署到 GitHub Pages。无需提交生成的 JavaScript 或阅读版文件。
 
 浏览器执行的是编译后的 JavaScript；GitHub Pages 不运行 TypeScript 源码或 Node 后端。`reading.html`、图片、论文链接与现有重定向仍可正常访问。
 

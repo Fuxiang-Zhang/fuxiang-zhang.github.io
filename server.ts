@@ -1,31 +1,34 @@
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mockReply } from './src/chat.js';
 import { isRecord } from './src/types.js';
 
-const root = new URL('../dist/', import.meta.url);
-const publicFiles = new Map<string, [string, string]>([
-  ['/', ['index.html', 'text/html']], ['/index.html', ['index.html', 'text/html']],
-  ['/reading.html', ['reading.html', 'text/html']],
-  ['/styles.css', ['styles.css', 'text/css']], ['/app.js', ['app.js', 'text/javascript']],
-  ...['content', 'render', 'types'].map((name): [string, [string, string]] => [`/${name}.js`, [`${name}.js`, 'text/javascript']]),
-  ['/chat.js', ['chat.js', 'text/javascript']], ['/config.js', ['config.js', 'text/javascript']],
-  ['/data/publications.json', ['data/publications.json', 'application/json']],
-  ['/assets/Photo.JPG', ['assets/Photo.JPG', 'image/jpeg']],
-  ['/assets/favicon.svg', ['assets/favicon.svg', 'image/svg+xml']],
-  ['/redirect/index.html', ['redirect/index.html', 'text/html']], ['/redirect/', ['redirect/index.html', 'text/html']],
-]);
+const root = fileURLToPath(new URL('../dist/', import.meta.url));
+const mimeTypes: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2',
+};
+function inside(root: string, path: string): boolean {
+  const child = relative(root, path);
+  return child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child);
+}
 
 function json(res: http.ServerResponse, status: number, value: unknown) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(value));
 }
 
-export function createServer() {
+export function createServer(publicRoot = root) {
   return http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+    let pathname: string;
+    try { pathname = decodeURIComponent(new URL(req.url || '/', 'http://localhost').pathname); }
+    catch { return json(res, 400, { error: 'Invalid URL.' }); }
     if (pathname === '/api/chat') {
       if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return json(res, 405, { error: 'Use POST.' }); }
       if (!req.headers['content-type']?.startsWith('application/json')) return json(res, 415, { error: 'Expected JSON.' });
@@ -45,11 +48,30 @@ export function createServer() {
       return;
     }
     if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: 'Method not allowed.' });
-    const file = publicFiles.get(pathname);
-    if (!file) return json(res, 404, { error: 'Not found.' });
     try {
-      const data = await readFile(new URL(file[0], root));
-      res.writeHead(200, { 'Content-Type': `${file[1]}; charset=utf-8`, 'Cache-Control': 'no-cache' });
+      const canonicalRoot = await realpath(publicRoot);
+      const requested = resolve(canonicalRoot, `.${pathname}`);
+      if (pathname.includes('\\') || pathname.includes('\0') || !inside(canonicalRoot, requested)) {
+        return json(res, 404, { error: 'Not found.' });
+      }
+      let file = await realpath(requested);
+      if (!inside(canonicalRoot, file)) return json(res, 404, { error: 'Not found.' });
+      if ((await stat(file)).isDirectory()) {
+        if (!pathname.endsWith('/')) {
+          res.writeHead(308, { Location: `${new URL(req.url || '/', 'http://localhost').pathname}/${new URL(req.url || '/', 'http://localhost').search}` });
+          return res.end();
+        }
+        file = await realpath(join(file, 'index.html'));
+      }
+      if (!inside(canonicalRoot, file) || !(await stat(file)).isFile()) {
+        return json(res, 404, { error: 'Not found.' });
+      }
+      const data = await readFile(file);
+      res.writeHead(200, {
+        'Content-Type': mimeTypes[extname(file).toLowerCase()] || 'application/octet-stream',
+        'Content-Length': data.length,
+        'Cache-Control': 'no-cache',
+      });
       res.end(req.method === 'HEAD' ? undefined : data);
     } catch { json(res, 404, { error: 'Not found.' }); }
   });
