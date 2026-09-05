@@ -43,7 +43,7 @@ export function createServer(publicRoot = root) {
         if (!isRecord(input) || typeof input.message !== 'string' || !input.message.trim() || input.message.length > 2000) {
           return json(res, 400, { error: 'Message must contain 1–2000 characters.' });
         }
-        return json(res, 200, mockReply(input.language === 'zh' ? 'zh' : 'en'));
+        return json(res, 200, mockReply());
       } catch { if (!res.writableEnded) json(res, 500, { error: 'Could not process request.' }); }
       return;
     }

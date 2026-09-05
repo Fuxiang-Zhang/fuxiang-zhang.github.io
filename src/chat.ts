@@ -1,12 +1,10 @@
-import { isRecord, type ChatRequest, type ChatReply, type Language } from './types.js';
+import { isRecord, type ChatRequest, type ChatReply } from './types.js';
 
 /** Shared by the local server and the static GitHub Pages demo. */
-export function mockReply(language: Language = 'en'): ChatReply {
+export function mockReply(): ChatReply {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   const id = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-  const text = language === 'zh'
-    ? `收到你的消息了。\n\n这是模拟回复，暂未连接 AI 模型或联网搜索。\n\n随机响应：${id}`
-    : `Your message came through.\n\nThis is a simulated reply. An AI model and web search are not connected yet.\n\nRandom response: ${id}`;
+  const text = `Your message came through.\n\nThis is a simulated reply. An AI model and web search are not connected yet.\n\nRandom response: ${id}`;
   return { id, text, mode: 'mock' };
 }
 
@@ -15,7 +13,7 @@ export async function requestReply(
   endpoint: string | null = null,
 ): Promise<ChatReply> {
   signal?.throwIfAborted();
-  if (!endpoint) return mockReply(request.language);
+  if (!endpoint) return mockReply();
   const response = await fetch(endpoint, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request), signal,

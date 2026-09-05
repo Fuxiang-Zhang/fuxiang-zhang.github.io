@@ -7,8 +7,8 @@
   <meta name="theme-color" content="#ffffff">
   <meta property="og:title" content="Fuxiang Zhang — A conversation with my research">
   <meta property="og:description" content="Large language models. Reinforcement learning. Multi-agent systems. Explore the research and the person behind it.">
-  <meta property="og:image" content="https://fuxiang-zhang.github.io/assets/Photo.JPG">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/Photo.JPG">
   <meta name="twitter:card" content="summary">
   <title>Fuxiang Zhang · Research & Conversations</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
@@ -17,27 +17,30 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <div class="app-shell">
-    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
-      <a class="brand" href="#overview"><span>Fuxiang Zhang</span><span class="brand-caption">Research homepage</span></a>
-      <button class="new-chat" id="new-chat"><span aria-hidden="true">＋</span><span data-i18n="newChat">New conversation</span><span class="shortcut" aria-hidden="true">↗</span></button>
-      <div class="nav-label" data-i18n="explore">Explore</div>
-      <nav class="topic-nav" id="topic-nav" aria-label="Research topics"></nav>
-      <div class="recent-section"><div class="nav-label" data-i18n="recent">Recent conversations</div><div id="recent-chats"><p class="recent-empty" data-i18n="recentEmpty">No conversations yet.</p></div></div>
+  <div class="app-shell" id="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Sessions">
+      <div class="sidebar-top">
+        <div class="sidebar-profile" id="sidebar-profile"><a class="brand" href="#bio">Fuxiang Zhang</a></div>
+        <button class="icon-button close-menu" id="close-menu" aria-label="Close navigation"></button>
+      </div>
+      <button class="new-chat" id="new-chat" type="button"></button>
+      <nav class="session-nav" id="topic-nav" aria-label="Sessions"></nav>
+      <nav class="chat-nav" id="recent-chats" aria-label="Conversations" hidden></nav>
       <div class="sidebar-bottom">
-        <div class="profile"><img src="assets/Photo.JPG" alt="Fuxiang Zhang" width="42" height="42"><div><strong>Fuxiang Zhang</strong><span data-i18n="position">Ph.D. candidate · NTU</span></div></div>
-        <div class="social-links"><a href="mailto:zfx.agi@gmail.com">Email ↗</a><a href="https://scholar.google.com/citations?user=GZRrWXAAAAAJ" target="_blank" rel="noopener noreferrer">Scholar ↗</a><a href="https://github.com/mansicer" target="_blank" rel="noopener noreferrer">GitHub ↗</a><a href="https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/" target="_blank" rel="noopener noreferrer">LinkedIn ↗</a></div>
-        <div class="sidebar-note"><span>© <span id="year">2026</span> Fuxiang Zhang</span></div>
+        <a href="reading.html" class="reading-link">Reading view</a>
+        <button class="icon-button" id="theme-toggle" aria-label="Switch color theme"></button>
       </div>
     </aside>
-    <button class="sidebar-scrim" id="sidebar-scrim" aria-label="Close navigation" hidden></button>
+    <div class="scrim" id="scrim" hidden></div>
     <main class="main" id="main">
-      <header class="topbar"><div class="breadcrumb"><button class="icon-button menu-toggle" id="menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">☰</button><span class="breadcrumb-name">Fuxiang Zhang</span><span class="breadcrumb-slash" aria-hidden="true">/</span><span id="current-topic">Overview</span></div><div class="topbar-actions"><a href="reading.html" class="reading-link" data-i18n="reading">Reading view ↗</a><span class="topbar-divider"></span><button class="language-button" id="language-toggle" aria-label="Switch to Chinese">EN <span>/ 中</span></button><button class="icon-button" id="theme-toggle" aria-label="Switch color theme"></button></div></header>
-      <div class="scroll-area" id="scroll-area"><div class="content" id="content"><div class="initial-loading">Opening the research space…</div></div></div>
-      <div class="composer-region"><div class="composer-wrap"><div class="context-chip" id="context-chip" hidden></div><form class="composer" id="chat-form"><label for="message" class="sr-only" data-i18n="inputLabel">Your question</label><textarea id="message" rows="1" maxlength="2000" placeholder="Ask about my research, papers, or journey…" required></textarea><div class="composer-bottom"><span class="composer-scope"><span data-i18n="assistantName">Fuxiang’s assistant</span></span><div class="composer-actions"><span class="enter-hint" data-i18n="enterHint">Enter to send</span><button type="submit" class="send-button" id="send-button" aria-label="Send message" disabled>↑</button></div></div></form><div class="composer-note"><span class="demo-dot" aria-hidden="true"></span><span data-i18n="demoNote">Prototype · Simulated replies.</span></div></div></div>
+      <div class="mobile-bar">
+        <button class="icon-button" id="menu-toggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"></button>
+        <span id="mobile-title"></span>
+      </div>
+      <div class="scroll-area" id="scroll-area"><div class="content" id="content"><div class="initial-loading">Loading…</div></div></div>
+      <div class="composer-region"><div class="composer-wrap"><div class="context-chip" id="context-chip" hidden></div><form class="composer" id="chat-form"><label for="message" class="sr-only">Your question</label><textarea id="message" rows="1" maxlength="2000" placeholder="Ask about my research, papers, or experience…" required></textarea><button type="submit" class="send-button" id="send-button" aria-label="Send message" disabled></button></form><p class="composer-note">Replies are simulated.</p></div></div>
     </main>
   </div>
-  <dialog id="paper-dialog" class="paper-dialog" aria-labelledby="paper-dialog-title"><div id="paper-detail"></div></dialog>
   <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">This conversational view needs JavaScript. <a href="reading.html">Read the complete academic homepage →</a></div></noscript>
 </body>

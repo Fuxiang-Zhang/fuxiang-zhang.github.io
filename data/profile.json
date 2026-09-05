@@ -1,0 +1,94 @@
+{
+  "profile": {
+    "name": "Fuxiang Zhang",
+    "position": "Ph.D. student · NTU · Singapore",
+    "photo": "assets/Photo.JPG",
+    "email": "zfx.agi@gmail.com",
+    "links": [
+      {
+        "label": "GitHub",
+        "url": "https://github.com/mansicer"
+      },
+      {
+        "label": "Google Scholar",
+        "url": "https://scholar.google.com/citations?user=GZRrWXAAAAAJ"
+      },
+      {
+        "label": "LinkedIn",
+        "url": "https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/"
+      },
+      {
+        "label": "X",
+        "url": "https://x.com/fuxiang_z"
+      }
+    ],
+    "bio": [
+      "I am a Ph.D. student at the College of Computing and Data Science, [Nanyang Technological University](https://www.ntu.edu.sg/), starting from January 2025, advised by Prof. [Bo An](https://personal.ntu.edu.sg/boan). I am part of an industrial post-graduate program (IPP) with [Skywork AI](https://skywork.ai).",
+      "I obtained my Master's and Bachelor's degrees from Nanjing University. During my time at Nanjing University, I was a member of the [LAMDA](http://www.lamda.nju.edu.cn/MainPage.ashx) group, in a reinforcement learning team led by Prof. [Yang Yu](https://www.lamda.nju.edu.cn/yangyu/) and Prof. [Zongzhang Zhang](https://www.lamda.nju.edu.cn/zhangzz/)."
+    ]
+  },
+  "research": [
+    {
+      "id": "llm",
+      "name": "Large Language Models",
+      "shortName": "Large Language Models",
+      "description": "Reasoning, self-verification, and preference alignment in language models. Explore work on how models learn and how their responses can be adapted."
+    },
+    {
+      "id": "rl",
+      "name": "Reinforcement Learning",
+      "shortName": "Reinforcement Learning",
+      "description": "Learning from data, prior knowledge, and interaction. Explore publications on offline reinforcement learning, policy generalization, and model-based learning."
+    },
+    {
+      "id": "marl",
+      "name": "Multi-Agent Reinforcement Learning",
+      "shortName": "Multi-Agent RL",
+      "description": "Learning and coordination across multiple agents. Explore work on communication, transferable skills, and multi-agent language-model systems."
+    }
+  ],
+  "interests": [
+    {
+      "title": "Reasoning and Agentic LLMs: Post-training and Test-time Alignment",
+      "description": "Beyond my industrial work on LLMs, I am interested in how post-training (specifically, reinforcement learning) and test-time scaling can align models toward targeted values and capabilities:",
+      "points": [
+        {
+          "title": "Reasoning models",
+          "description": "I train reasoning models with reinforcement learning on math and coding benchmarks, including large-scale training recipes and agentic coding models for software engineering.",
+          "topic": "llm"
+        },
+        {
+          "title": "Multi-agent LLM systems",
+          "description": "I study how to stabilize reinforcement learning when multiple LLM agents are trained together.",
+          "topic": "llm"
+        },
+        {
+          "title": "Test-time alignment",
+          "description": "I explore test-time methods that align models beyond verifiable-only domains, such as realigning preferences through reward decomposition without retraining.",
+          "topic": "llm"
+        }
+      ]
+    },
+    {
+      "title": "Reinforcement Learning and Multi-agent Reinforcement Learning",
+      "description": "I have several topics of interest in the field of RL and MARL:",
+      "points": [
+        {
+          "title": "Multi-agent cooperation",
+          "description": "I study multi-agent imitation, communication, and offline training in challenging cooperative tasks such as StarCraft II and multi-joint locomotion control.",
+          "topic": "marl"
+        },
+        {
+          "title": "Offline RL",
+          "description": "I address the data-efficiency challenge of training RL policies from offline data, particularly under scarce-data and multi-task settings.",
+          "topic": "rl"
+        },
+        {
+          "title": "Exploration and exploitation in RL",
+          "description": "I investigate the exploration–exploitation trade-off in RL training through LLM guidance, logical induction, and more direct optimization schemes built on a learned environment dynamics model.",
+          "topic": "rl"
+        }
+      ]
+    }
+  ]
+}

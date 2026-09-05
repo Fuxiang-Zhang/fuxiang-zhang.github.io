@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
 import { readFile } from 'node:fs/promises';
-import { parsePublications } from '../src/types.js';
+import { loadSiteData, parseSiteData, siteFiles } from '../src/types.js';
 import { once } from 'node:events';
 import { createServer } from '../server.js';
 import { requestReply } from '../src/chat.js';
@@ -20,18 +20,19 @@ test('homepage and mock chat work together without external services', async t =
       assert.equal(response.status, 200, path);
       assert.ok((await response.arrayBuffer()).byteLength > 0);
     }
-    const papers = parsePublications(await fetch(`${origin}/data/publications.json`).then(r=>r.json()));
-    const source = JSON.parse(await readFile(new URL('../../data/publications.json', import.meta.url), 'utf8'));
-    assert.deepEqual(papers, source);
+    const readLocal = async (path: string) => JSON.parse(await readFile(new URL(`../../${path}`, import.meta.url), 'utf8'));
+    const site = await loadSiteData(path => fetch(`${origin}/${path}`).then(r=>r.json()));
+    assert.deepEqual(site, await loadSiteData(readLocal));
+    for (const path of Object.values(siteFiles)) assert.deepEqual(await fetch(`${origin}/${path}`).then(r=>r.json()), await readLocal(path));
     const reading = await fetch(`${origin}/reading.html`).then(r=>r.text());
-    for(const paper of papers) assert.ok(reading.includes(paper.id), paper.title);
+    for(const paper of site.publications) assert.ok(reading.includes(paper.id), paper.title);
   });
   await t.test('returns distinct random strings through the real frontend transport', async () => {
-    const first = await requestReply({message:'What does Fuxiang research?',language:'en',topic:'overview'},`${origin}/api/chat`);
-    const second = await requestReply({message:'介绍一下这篇论文',language:'zh',topic:'chat',paperId:'paper-6'},`${origin}/api/chat`);
+    const first = await requestReply({message:'What does Fuxiang research?',topic:'bio'},`${origin}/api/chat`);
+    const second = await requestReply({message:'Tell me about this paper',topic:'chat',paperId:'paper-6'},`${origin}/api/chat`);
     assert.equal(first.mode, 'mock');
     assert.match(first.text, /simulated reply/);
-    assert.match(second.text, /模拟回复/);
+    assert.match(second.text, /simulated reply/);
     assert.notEqual(first.id, second.id);
     assert.match(first.id, /^[a-f0-9]{24}$/);
     assert.ok(first.text.includes(first.id));
@@ -51,12 +52,12 @@ test('homepage and mock chat work together without external services', async t =
     }
   });
   await t.test('propagates unavailable-service errors for retry UI', async () => {
-    await assert.rejects(requestReply({message:'hello',language:'en'},`${origin}/missing`), /404|405/);
+    await assert.rejects(requestReply({message:'hello'},`${origin}/missing`), /404|405/);
   });
 });
 
 test('static preview explicitly returns mock text and honors cancellation', async () => {
-  const result = await requestReply({message:'hello',language:'en'}, null);
+  const result = await requestReply({message:'hello'}, null);
   assert.equal(result.mode, 'mock');
   assert.match(result.text, /simulated reply/);
   const controller = new AbortController();
@@ -80,16 +81,23 @@ test('static export contains executable modules and no TypeScript or server sour
   }
 });
 
-test('shared content keeps Work separate and validates publication inputs', async () => {
+test('shared CV sections render independently and site data is validated', async () => {
   const { renderJourney } = await import('../src/render.js');
-  for (const language of ['en', 'zh'] as const) {
-    const work = renderJourney(language, false, ['experience']);
-    const misc = renderJourney(language, false, ['education', 'service', 'awards']);
-    assert.ok(work.includes('Skywork AI') && work.includes('DeRL-SWE-32B'));
-    assert.ok(!misc.includes('id="journey-experience"'));
-    assert.ok(misc.includes('id="journey-education"'));
-  }
-  for (const invalid of [null, {}, [{ id:'incomplete' }]]) assert.throws(() => parsePublications(invalid));
+  const site = await loadSiteData(async path => JSON.parse(await readFile(new URL(`../../${path}`, import.meta.url), 'utf8')));
+  const experiences = renderJourney(site, ['experience', 'education']);
+  const misc = renderJourney(site, ['service', 'awards']);
+  assert.ok(experiences.includes('Skywork AI') && experiences.includes('DeRL-SWE-32B') && experiences.includes('id="journey-education"'));
+  assert.ok(!misc.includes('id="journey-experience"') && !misc.includes('id="journey-education"'));
+  assert.ok(misc.includes('id="journey-service"'));
+  const broken = (patch: (copy: any) => void) => { const copy = structuredClone(site); patch(copy); return copy; };
+  for (const invalid of [null, {}, { ...site, publications: [{ id:'incomplete' }] },
+    broken(s => { s.experience[0].contributions[0].paperId = 'missing'; }),
+    broken(s => { s.publications.push({ ...s.publications[0] }); }),
+    broken(s => { s.research.pop(); }),
+    broken(s => { s.interests[0].topic = 'unknown'; }),
+    broken(s => { s.interests[1].points[0].description = 1; }),
+    broken(s => { s.awards[0].period = 2020; })]) assert.throws(() => parseSiteData(invalid));
+  await assert.rejects(loadSiteData(async path => path.endsWith('cv.json') ? [] : JSON.parse(await readFile(new URL(`../../${path}`, import.meta.url), 'utf8'))));
 });
 
 test('static service discovers new assets and confines paths and symlinks to its public root', async t => {

@@ -51,9 +51,9 @@ test('build removes stale modules and preserves the last successful output on fa
   await assert.rejects(build());
   await unchanged();
   await rm(obsolete);
-  const data = join(fixture, 'data/publications.json');
+  const data = join(fixture, 'data/cv.json');
   const validData = await readFile(data);
-  await writeFile(data, '[{"id":"incomplete"}]');
+  await writeFile(data, '{"experience":[{"organization":"incomplete"}]}');
   await assert.rejects(build());
   await unchanged();
   await writeFile(data, validData);
