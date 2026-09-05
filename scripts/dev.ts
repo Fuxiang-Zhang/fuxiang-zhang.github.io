@@ -10,7 +10,7 @@ let dirty = false;
 let timer: ReturnType<typeof setTimeout>;
 
 function startServer() {
-  server = spawn(process.execPath, ['.build/server.js'], { cwd: root, stdio: 'inherit' });
+  server = spawn(process.execPath, ['--env-file-if-exists=.env', '.build/server.js'], { cwd: root, stdio: 'inherit' });
   server.on('error', error => console.error(error.message));
 }
 async function stopServer() {
@@ -41,11 +41,12 @@ async function rebuild() {
 
 startServer();
 const watcher = watch(root, { recursive: true }, (_, filename) => {
-  if (!filename || !/^(src\/|scripts\/|data\/|assets\/|redirect\/|index\.html$|styles\.css$|server\.ts$|tsconfig\.json$)/.test(filename)) return;
+  if (!filename || !/^(src\/|chat\/|worker\/|scripts\/|data\/|assets\/|redirect\/|index\.html$|styles\.css$|server\.ts$|tsconfig\.json$)/.test(filename)) return;
   clearTimeout(timer);
   timer = setTimeout(() => void rebuild(), 150);
 });
-for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+// SIGHUP covers a closed terminal window, so the preview server does not outlive the watcher.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
   process.once(signal, () => {
     clearTimeout(timer);
     watcher.close();

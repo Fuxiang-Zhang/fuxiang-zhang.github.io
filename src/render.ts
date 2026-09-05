@@ -1,4 +1,7 @@
+import { isOfftopicReply, MAX_PAPER_CARDS, splitPaperMarkers } from './chat.js';
 import { copy, suggestions, type CopyKey } from './content.js';
+import { commands, commandForTopic } from './commands.js';
+import { nameBanner } from './banner.js';
 import { filterPublications } from './state.js';
 import {
   topics, categories, researchTopics,
@@ -35,21 +38,7 @@ const icons: Record<string, string> = {
   chat:'<path d="M21 12a8 8 0 0 1-8 8H7l-4 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z"/>',
 };
 export const icon = (name: string) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name] || ''}</svg>`;
-/** Filled brand glyphs for the sidebar quick links, keyed by link label (Simple Icons, CC0). */
-const brandIcons: Record<string, string> = {
-  email:'M2 5.5A2.5 2.5 0 0 1 4.5 3h15A2.5 2.5 0 0 1 22 5.5v.4l-10 6.25L2 5.9zM2 8.25l10 6.25 10-6.25V18.5a2.5 2.5 0 0 1-2.5 2.5h-15A2.5 2.5 0 0 1 2 18.5z',
-  github:'M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12',
-  scholar:'M5.242 13.769 0 9.5 12 0l12 9.5-5.242 4.269C17.548 11.249 14.978 9.5 12 9.5c-2.977 0-5.548 1.748-6.758 4.269zM12 10a7 7 0 1 0 0 14 7 7 0 0 0 0-14z',
-  linkedin:'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z',
-  x:'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z',
-};
-const brandIcon = (name: string) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${brandIcons[name]}" fill="currentColor"/></svg>`;
-const brandFor = (label: string) => {
-  const key = label.toLowerCase().replace(/[^a-z]/g, '');
-  return key === 'x' || key === 'twitter' ? 'x' : key === 'googlescholar' ? 'scholar' : key in brandIcons ? key : '';
-};
-/** Abstract mark shown beside every reply; the photo stays in the Bio message. */
-const botMark = '<div class="bot-mark" aria-hidden="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.7 5.6 4.4 9.3 10 10-5.6.7-9.3 4.4-10 10-.7-5.6-4.4-9.3-10-10 5.6-.7 9.3-4.4 10-10z" fill="currentColor"/></svg></div>';
+const promptLine = (command: string) => `<div class="command-echo"><span class="command-prompt" aria-hidden="true">›</span> ${escapeHTML(command)}</div>`;
 
 export type SectionId = 'education' | 'experience' | 'service' | 'awards';
 /** One CV entry: period in the left column, everything else in the right column. */
@@ -77,8 +66,8 @@ export function renderJourney(site: SiteData, sectionIds: SectionId[]) {
     service: () => site.service.map(entry => cvRow(entry.period, entry.venue, entry.role)).join(''),
     awards: () => site.awards.map(entry => cvRow(entry.period, entry.title, entry.issuer)).join(''),
   };
-  return sectionIds.map(id => `<section class="cv-section" aria-labelledby="journey-${id}">
-      <h2 id="journey-${id}">${t(id)}</h2>
+  return sectionIds.map(id => `<section class="cv-section">
+      <h2>${t(id)}</h2>
       <div class="cv-list">${bodies[id]()}</div>
       </section>`).join('');
 }
@@ -89,7 +78,6 @@ const paperLinks = (paper: Publication) =>
 const topicName = (site: SiteData, topic: ResearchTopic) => site.research.find(interest => interest.id === topic)?.shortName ?? topic;
 const byYear = (a: Publication, b: Publication) => b.year - a.year;
 const equalNote = (papers: Publication[]) => papers.some(paper => paper.authors.includes('*')) ? `<p class="footnote">${t('equal')}</p>` : '';
-const linkIcon = icon('external'), codeIcon = icon('code'), chatIcon = icon('chat');
 
 interface RenderContext {
   site: SiteData;
@@ -101,17 +89,17 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   const { profile, publications } = site;
   const chip = (label: string, attributes: string) => `<button class="chip" ${attributes}>${label}</button>`;
   const showChip = (kind: Content['kind'], label: string, extra = '') => chip(`${label} →`, `data-show="${kind}"${extra}`);
-  const opening = (body: string) => `<div class="message bot-message opening">${botMark}<div class="message-body">${body}</div></div>`;
-  /** One publication as a card: full author list, venue and links. Nothing is abbreviated. */
+  const opening = (body: string) => `<div class="message bot-message opening"><div class="message-body">${body}</div></div>`;
+  /** One publication as terminal output, with complete authors and links. */
   function paperCard(paper: Publication) {
     return `<article class="paper">
       <div class="paper-meta"><span class="paper-venue-tag">${escapeHTML(paper.venueShort)}</span><span class="paper-year">${paper.year}</span><span class="paper-topic">${escapeHTML(topicName(site, paper.topic))}</span></div>
       <button class="paper-title" data-paper="${escapeHTML(paper.id)}">${paperTitle(paper)}</button>
       <p class="paper-authors">${authorMarkup(paper.authors)}</p>
       <div class="paper-actions">${[
-        external(paper.links.paper, `${linkIcon}${t('openPaper')}`, 'paper-action'),
-        external(paper.links.code, `${codeIcon}${t('openCode')}`, 'paper-action'),
-      ].filter(Boolean).join('')}<button class="paper-action ask-paper" data-ask="${escapeHTML(paper.id)}">${chatIcon}${t('askPaper')}</button></div>
+        external(paper.links.paper, `[${t('openPaper')}]`, 'paper-action'),
+        external(paper.links.code, `[${t('openCode')}]`, 'paper-action'),
+      ].filter(Boolean).join('')}<button class="paper-action ask-paper" data-ask="${escapeHTML(paper.id)}" aria-label="${t('askPaper')}">${t('askCommand')}</button></div>
       </article>`;
   }
   function loadError() {
@@ -125,10 +113,26 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   /* Opening messages: one screen of content per session; the full content is appended as replies. */
   function bioOpening() {
     if (loadFailed) return loadError();
-    return `<p class="greeting">${t('greeting')} <strong>${escapeHTML(profile.name)}</strong>.</p>
-      ${profile.bio.map(paragraph => `<p>${inline(paragraph)}</p>`).join('')}
-      <div class="chips">${showChip('research', t('research'))}${showChip('publications', t('publications'))}</div>`;
+    const banner = nameBanner(profile.name);
+    return `<h1 class="bio-name">${escapeHTML(profile.name)}</h1>
+      ${banner.length ? `<div class="name-banner" aria-hidden="true">${banner.map(word => `<pre>${escapeHTML(word)}</pre>`).join('')}</div>` : ''}
+      <p class="bio-position">${escapeHTML(profile.position)}</p>
+      <div class="bio-links">${profile.links.map(link => external(link.url, `[${escapeHTML(link.label)}]`)).join(' ')}
+      ${profile.email ? `<a href="mailto:${escapeHTML(profile.email)}">[Email]</a>` : ''}</div>
+      <div class="bio-copy">${profile.bio.map(paragraph => `<p>${inline(paragraph)}</p>`).join('')}</div>
+      <nav class="preset-links" aria-label="Content presets">${presetLinks()}</nav>
+      <p class="terminal-note">Click a command above, type /help, or ask your question below.</p>`;
   }
+  function presetLinks() {
+    return commands.filter(command => command.name !== '/bio' && command.name !== '/help').map(command => `<button type="button" data-command="${command.name}">${command.name}</button>`).join('<span aria-hidden="true"> · </span>');
+  }
+  function helpContent() {
+    return `<h2>Available commands</h2><div class="help-list">${commands.map(command =>
+      `<div><button type="button" data-command="${command.name}">${command.name}</button><span>${escapeHTML(command.description)}</span></div>`).join('')}</div>
+      <p>Click or type a command to print its output here. Earlier output stays above.</p>
+      <p class="terminal-note">Tab completes a command. Enter runs it. Shift+Enter adds a line.<br>Plain text sends a question to the assistant.</p>`;
+  }
+
   const interests = () => site.interests.map(interest => `<section class="interest">
       <h3>${escapeHTML(interest.title)}</h3>
       <p>${inline(interest.description)}${relatedLink(interest.topic)}</p>${interest.points?.length ? `
@@ -166,14 +170,16 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   /* Content replies: the complete content behind each opening message, appended to the conversation. */
   function publicationsContent(content: Extract<Content, { kind: 'publications' }>) {
     const { category, topic } = content;
-    const papers = filterPublications(publications, { query: '', year: '', category: category ?? '', topic: topic ?? '' });
+    const papers = filterPublications(publications, { category, topic });
     const title = category ? t(category) : topic ? topicName(site, topic) : t('openAll');
     return `<h3 class="content-title">${escapeHTML(title)} <span class="content-count">${papers.length}</span></h3>
       <div class="paper-list">${papersList(papers)}</div>${equalNote(papers)}`;
   }
   function contentBody(content: Content) {
-    if (loadFailed) return loadError();
+    if (loadFailed && content.kind !== 'help') return loadError();
     switch (content.kind) {
+      case 'preset': return openings[content.topic]();
+      case 'help': return helpContent();
       case 'research': return `<p>${t('researchOpening')}</p>${interests()}`;
       case 'publications': return publicationsContent(content);
       case 'paper': {
@@ -186,56 +192,65 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
     ? papers.map(paper => paperCard(paper)).join('')
     : `<p class="empty-results">${t('noResults')}</p>`;
 
-  /** Photo, name and quick links at the top of the sidebar. */
+  /** Plain profile summary retained for alternate rendering consumers. */
   function profileCard() {
-    return `${profile.photo ? `<a href="#bio"><img class="profile-photo" src="${escapeHTML(profile.photo)}" alt="${escapeHTML(profile.name)}" width="56" height="56"></a>` : ''}
-      <a class="brand" href="#bio">${escapeHTML(profile.name || 'Fuxiang Zhang')}</a>
-      ${profile.position ? `<p class="profile-position">${escapeHTML(profile.position)}</p>` : ''}
-      ${profile.email ? `<p class="profile-links">${[
-        `<a class="profile-link" href="mailto:${escapeHTML(profile.email)}" aria-label="Email" data-tip="Email">${brandIcon('email')}</a>`,
-        ...profile.links.map(link => {
-          const brand = brandFor(link.label);
-          return external(link.url, brand ? brandIcon(brand) : escapeHTML(link.label), brand ? 'profile-link' : 'profile-link profile-link-text')
-            .replace('target="_blank"', `aria-label="${escapeHTML(link.label)}" data-tip="${escapeHTML(link.label)}" target="_blank"`);
-        }),
-      ].join('')}</p>` : ''}`;
+    return `<p>${escapeHTML(profile.name)}</p><p>${escapeHTML(profile.position)}</p>
+      ${profile.photo ? `<img src="${escapeHTML(profile.photo)}" alt="${escapeHTML(profile.name)}" width="56" height="56">` : ''}
+      ${profile.email ? `<a href="mailto:${escapeHTML(profile.email)}">[Email]</a>` : ''}
+      ${profile.links.map(link => external(link.url, `[${escapeHTML(link.label)}]`)).join(' ')}`;
+  }
+  /*
+   * Reply text with the publications the assistant named rendered as cards.
+   * Every text run is escaped on its own, so model output never reaches the
+   * page as markup, and a marker that is unknown, repeated or over the limit is
+   * dropped rather than shown. An off-topic refusal renders as the page's own
+   * notice instead of the reply.
+   */
+  function replyBody(text: string, failed: boolean): string {
+    const textClass = `message-text ${failed ? 'message-error' : ''}`;
+    // A refusal is shown in the page's own words, so the model never writes this text.
+    if (isOfftopicReply(text)) return `<div class="message-text message-offtopic">${escapeHTML(t('offtopic'))}</div>`;
+    const shown = new Set<string>();
+    const body = splitPaperMarkers(text).map(part => {
+      if ('paperId' in part) {
+        const paper = publications.find(paper => paper.id === part.paperId);
+        if (!paper || shown.has(paper.id) || shown.size >= MAX_PAPER_CARDS) return '';
+        shown.add(paper.id);
+        return paperCard(paper);
+      }
+      const run = part.text.trim();
+      return run ? `<div class="${textClass}">${escapeHTML(run)}</div>` : '';
+    }).join('');
+    return body || `<div class="${textClass}"></div>`;
   }
   function messages(thread: Thread) {
     return thread.messages.map(message => {
       const anchor = `id="message-${escapeHTML(message.id)}"`;
       if (message.role === 'user') {
-        return `<div class="message user-message" ${anchor}><div class="user-bubble">${escapeHTML(message.text)}</div></div>`;
+        return `<div class="message user-message" ${anchor}>${promptLine(message.text)}</div>`;
       }
       if (message.role === 'content') {
-        return `<div class="message bot-message content-message" ${anchor}>${botMark}<div class="message-body">${contentBody(message.content)}</div></div>`;
+        const content = message.content;
+        const command = content.kind === 'preset' ? commandForTopic(content.topic).name
+          : content.kind === 'help' ? '/help' : content.kind === 'research' ? '/research'
+          : '/papers';
+        return `<div class="message content-message" ${anchor}>${promptLine(command)}<div class="message-body">${contentBody(content)}</div></div>`;
       }
       if (message.state === 'pending') {
-        return `<div class="message bot-message" ${anchor}>${botMark}<div class="message-body">
+        return `<div class="message bot-message" ${anchor}><div class="message-body">
           <div class="thinking" aria-label="${t('thinking')}"><span></span><span></span><span></span></div>
         </div></div>`;
       }
       const retryable = message.state === 'error' || message.state === 'stopped';
-      const text = retryable ? t(message.state === 'error' ? 'failed' : 'stopped') : message.text;
+      const text = message.state === 'error' ? message.error ?? t('failed') : message.state === 'stopped' ? t('stopped') : message.text;
       const action = retryable
         ? `<button data-retry="${escapeHTML(message.id)}">${t('retry')}</button>`
         : `<button data-copy="${escapeHTML(message.id)}">${t('copy')}</button>`;
-      return `<div class="message bot-message" ${anchor}>${botMark}<div class="message-body">
-        <div class="message-text ${message.state === 'error' ? 'message-error' : ''}">${escapeHTML(text)}</div>
-        <div class="message-controls"><span class="reply-label">${t('simulated')}</span>${action}</div>
+      return `<div class="message bot-message" ${anchor}><div class="message-body">
+        ${replyBody(text, message.state === 'error')}
+        <div class="message-controls"><span class="reply-label">${t(message.mode === 'live' ? 'aiReply' : 'simulated')}</span>${action}</div>
       </div></div>`;
     }).join('');
-  }
-
-  function navigation(current: Thread, chats: Thread[]) {
-    const main = topics.map(topic => `<a class="nav-item ${current.topic === topic ? 'active' : ''}"
-        href="#${topic}" ${current.topic === topic ? 'aria-current="page"' : ''}>${t(topic)}</a>`).join('');
-    const recent = chats.slice().reverse().slice(0, 12);
-    const history = recent.length ? `<span class="conversations-label">${t('conversations')}</span>${recent.map(thread => {
-      const title = escapeHTML(thread.title || t('chatTitleShort'));
-      return `<a href="#chat/${escapeHTML(thread.id)}" class="nav-item conversation-item ${current.id === thread.id ? 'active' : ''}"
-          ${current.id === thread.id ? 'aria-current="page"' : ''} title="${title}">${title}</a>`;
-    }).join('')}` : '';
-    return { main, history };
   }
 
   function paperDetail(paper: Publication) {
@@ -243,7 +258,9 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       <div class="detail-label">${t('authors')}</div>
       <p class="detail-authors">${authorMarkup(paper.authors)}</p>${paper.authors.includes('*') ? `<p class="footnote">${t('equal')}</p>` : ''}
       <div class="detail-label">${t('venue')}</div>
-      <p class="detail-venue"><em>${escapeHTML(paper.venue)}</em>, ${paper.year} · ${escapeHTML(topicName(site, paper.topic))}</p>
+      <p class="detail-venue"><em>${escapeHTML(paper.venue)}</em>, ${paper.year} · ${escapeHTML(topicName(site, paper.topic))}</p>${paper.abstract ? `
+      <div class="detail-label">${t('abstract')}</div>
+      <p class="detail-abstract">${inline(paper.abstract)}</p>` : ''}
       <p class="detail-links">${paperLinks(paper)}</p>
       <p class="detail-ask"><button class="text-link" data-ask="${escapeHTML(paper.id)}">${t('askPaper')} →</button><br><span class="footnote">${t('detailDescription')}</span></p>`;
   }
@@ -256,9 +273,9 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   };
   return {
     /** A conversation started from a session skips the greeting: its first message is the question itself. */
-    page: (page: Page, intro = true) => `${intro ? opening(openings[page]()) : ''}<div id="messages" class="messages" aria-label="${t('conversations')}">
+    page: (page: Page, intro = true) => `${page === 'chat' ? '' : promptLine(commandForTopic(page).name)}${intro ? opening(openings[page]()) : ''}<div id="messages" class="messages" aria-label="${t('conversations')}">
       </div>`,
-    papers: papersList, messages, navigation, paperDetail, paperContext, profileCard,
+    papers: papersList, messages, paperDetail, paperContext, profileCard,
   };
 }
 

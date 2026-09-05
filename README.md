@@ -1,93 +1,252 @@
 # Fuxiang’s research homepage
 
-TypeScript 驱动的个人主页，保留原生 HTML/CSS，不使用前端框架。聊天暂为随机模拟回复，无 API 费用。
+A terminal-style personal research homepage. The frontend is a static page written in TypeScript and hosted on GitHub Pages. The chat assistant on the page is served by a Cloudflare Worker backend that calls an OpenAI GPT model and answers only from the homepage content in `data/site.md`. No frontend framework; the browser runs compiled, plain JavaScript.
 
-## 开发
+## Contents
 
-需要 Node.js 22+。
+- [Architecture](#architecture)
+- [Quick start](#quick-start)
+- [Common commands](#common-commands)
+- [Frontend design](#frontend-design)
+- [Site data](#site-data)
+- [Chat backend](#chat-backend)
+- [Deployment](#deployment)
+- [Tests](#tests)
+- [Repository layout](#repository-layout)
+
+## Architecture
+
+```
+Visitor's browser
+  │  GET static files                     │  GET/POST /api/chat (CORS)
+  ▼                                       ▼
+GitHub Pages                        Cloudflare Worker (worker/index.ts)
+  dist/ static export                   chat/handler.ts
+  index.html + compiled JS                ├─ origin allowlist, request validation
+  data/site.md                            ├─ rate limits + daily token ledger ── Workers KV
+  reading.html                            └─ chat/openai.ts ──────────────────── OpenAI Responses API
+```
+
+- **The frontend depends only on static files.** Every fact comes from one Markdown file, `data/site.md`; page rendering and the chat instructions are generated from that single source.
+- **The backend is one handler built on the Web-standard Request/Response types.** The local Node server and the Cloudflare Worker share it; there is no second implementation.
+- **Secrets live only in the Worker Secret store and the local `.env`.** They never enter the repository or the browser.
+- **The local preview calls the deployed Worker by default,** so what you see locally matches the published homepage. Query parameters switch to mock replies or the local backend.
+
+## Quick start
+
+Requires Node.js 22.9 or newer.
 
 ```sh
 npm ci
 npm run dev
 ```
 
-打开 http://127.0.0.1:3000 。修改源码后会自动编译，刷新浏览器即可查看。`PORT`、`HOST` 可调整本地服务地址。
+Open http://127.0.0.1:3000 . Source changes are recompiled automatically; refresh the browser to see them.
 
-```sh
-npm run check  # TypeScript 严格类型检查
-npm test       # 构建并运行测试
-npm start      # 构建并启动服务，不监听文件变化
-```
-
-## 代码结构
-
-| 文件 | 用途 |
+| URL | Chat backend |
 | --- | --- |
-| `src/app.ts` | DOM 更新、事件与聊天请求调度 |
-| `src/state.ts` | 会话、草稿、内容回复、论文链接来源和筛选逻辑 |
-| `src/content.ts` | 界面文案（按钮、提示、标题等），不含任何主页事实内容 |
-| `src/render.ts` | 会话开场消息、侧边栏、消息与内容回复、论文详情以及阅读版的纯 HTML 渲染 |
-| `src/stream.ts` | 回复的逐 token 渲染动画，接入真实后端流式输出时复用 |
-| `src/chat.ts` | 前后端共用的模拟回复及请求接口 |
-| `src/config.ts` | 聊天后端地址与主页统计配置 |
-| `src/types.ts` | 站点数据结构 `SiteData`、加载合并 `loadSiteData` 与校验 `parseSiteData` |
-| `data/profile.json` | 基本信息与研究方向 |
-| `data/publications.json` | 论文列表 |
-| `data/cv.json` | 工作经历、教育经历、学术服务、荣誉奖励 |
-| `server.ts` | 静态文件服务与 `POST /api/chat` |
-| `scripts/build.mjs` | 启动 TS 编译，成功后替换构建输出 |
-| `scripts/build.ts` / `scripts/dev.ts` | 静态导出 / 开发监听 |
-| `assets/fonts/` | 自托管的 Inter 与 Source Serif 4（SIL Open Font License），正文用 Inter，问候语、名字和论文标题用衬线 |
+| `http://127.0.0.1:3000/` | The deployed Worker, same as the published homepage |
+| `http://127.0.0.1:3000/?chat=mock` | Mock replies, no backend call |
+| `http://127.0.0.1:3000/?chat=local` | The local Node server's `/api/chat`; live replies only with `OPENAI_API_KEY` in `.env`, otherwise mock |
 
-主页以对话为中心。侧边栏列出五个固定会话 Bio → Research → Publications → Experiences → Miscellaneous 以及访客新开的对话；每个会话的第一条消息由站点数据渲染：Bio、Research、Experiences（工作与教育经历）、Miscellaneous（学术服务、荣誉）直接展示全部内容，Publications 按类别以卡片形式列出全部论文（完整作者、发表信息与链接）；点击消息中的按钮或论文标题，会把研究兴趣、论文列表或论文详情作为新的回复追加到对话末尾，像聊天回复一样逐 token 渲染并跟随滚动（系统开启减少动态效果时直接显示），重复点击复用上一条。直接访问 `#paper/<id>` 链接会在 Publications 会话中以回复形式打开该论文。在五个固定会话里输入的问题，发送后都会开启并跳转到新的对话，固定会话本身只保留站点内容；只有点击 New chat 开启的对话才显示问候语和建议问题，没有发送过消息也没有草稿的对话在离开后自动丢弃；「Ask about this paper」只是把论文放进输入框作为上下文，发送后新对话以该论文命名。旧的 `#overview`、`#journey`、`#work` 链接会重定向。各会话保留本次访问的输入和对话；刷新后清空消息。只有主题偏好写入本机存储。重试失败回复保留尚未发送的新草稿。
+The status bar shows the current mode: `chat: live` means the backend has a model connected, `chat: simulated` means mock replies, and `chat: budget used up` means today's token budget is spent.
 
-## 站点数据
+## Common commands
 
-`data/` 目录是主页的唯一数据源。聊天版在浏览器中读取这些文件渲染各个会话和内容回复，阅读版 `reading.html`（经典单页样式）在构建时由同一份数据生成。`loadSiteData` 把三个文件合并为一个 `SiteData` 对象，渲染代码只面对这一个结构。内容分为七类，按格式存放在三个文件里：
+### Development and testing
 
-| 文件 | 字段 | 内容 | 主要字段 |
-| --- | --- | --- | --- |
-| `profile.json` | `profile` | 基本信息 | `name`、`position`、`photo`、`email`、`links`、`bio`（段落数组） |
-| `profile.json` | `research` | 论文主题（筛选与标注用） | `id`（`llm` / `rl` / `marl`）、`name`、`shortName`、`description` |
-| `profile.json` | `interests` | Research 会话的研究兴趣 | `title`、`description`、可选 `topic`（关联论文筛选）、可选 `points`（`title`、`description`、可选 `topic`） |
-| `publications.json` | （数组） | 论文发表 | `id`、`title`、`authors`、`venue`、`venueShort`、`year`、`category`、`topic`、`links` |
-| `cv.json` | `experience` | 工作与研究经历 | `organization`、`role`、`location`、`period`、`description`、`links`、`contributions` |
-| `cv.json` | `education` | 教育经历 | `institution`、`degree`、`location`、`period`、`description`、`links` |
-| `cv.json` | `service` | 学术服务 | `venue`、`role`、`period` |
-| `cv.json` | `awards` | 荣誉奖励 | `title`、`issuer`、`period` |
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Build, start the local preview, and rebuild on source changes |
+| `npm start` | Build and start the local server without watching |
+| `npm run build` | Compile TypeScript, validate the data, and export the static site to `dist/` |
+| `npm run check` | Strict TypeScript type check |
+| `npm test` | Build and run the whole test suite |
+| `PORT=3001 npm run dev` | Start on another port; `HOST` works the same way |
+| `lsof -nP -iTCP:3000 -sTCP:LISTEN` | Find a leftover preview process when the port is busy |
 
-约定：
+### Worker deployment and operations
 
-- 论文 `category` 取 `reports` / `conference` / `journal`，`topic` 取研究方向 id。
-- 工作经历的 `contributions` 可通过 `paperId` 关联论文，聊天版会把论文详情作为回复追加到对话，阅读版会跳转到对应条目。
-- 文本字段可用 `[显示文字](https://…)` 写内联链接，其余内容一律按纯文本转义；只允许 http(s) 链接。
-- 构建时会校验数据结构、论文 id 唯一性、`paperId` 引用有效性以及三个研究方向齐全，校验失败则保留上一版构建。完整类型见 `src/types.ts`。
+| Command | Purpose |
+| --- | --- |
+| `npx wrangler login` | Log in to Cloudflare, once |
+| `npx wrangler whoami` | Show the account and Account ID |
+| `npx wrangler kv namespace create CHAT_KV` | Create the KV namespace for limits and the ledger; paste its id into `wrangler.toml` |
+| `npm run worker:secret` | Store `OPENAI_API_KEY` as a Worker Secret |
+| `npm run worker:deploy` | Deploy the Worker |
+| `npm run worker:dev` | Run the Worker locally; put the key in `.dev.vars` |
+| `npx wrangler tail` | Stream the Worker's live logs |
+| `npx wrangler deploy --dry-run --outdir=/tmp/worker` | Bundle without deploying, to check that it compiles |
 
-测试只约束内容显示与数据准确性：
-
-- `tests/data.test.ts`：数据读取无丢失、字段类型、论文 id 唯一性及引用有效性。
-- `tests/render.test.ts`：基本资料、研究兴趣、履历和论文内容与 `data/` 一致，链接准确，缺失数据不冒充有效资料，文本正确转义。
-- `tests/state.test.ts`：论文筛选结果准确、问题与论文上下文不串用、逐步输出不丢字。
-- `tests/server.test.ts`：实际提供的数据和照片与源文件一致，导出阅读页保留论文资料，模拟回复明确标识。
-
-不锁定 CSS 类名、HTML 嵌套、图标、版式、资料所在分区、导航顺序、开场方式、对话清理策略或动画节奏；也不测试构建回滚、临时文件清理、服务器路径防护等基础设施行为。内容断言检查生成 HTML 的文字和链接，不代替浏览器对遮挡、溢出等实际显示问题的检查。
-
-`data/` 是这些测试的比对依据。测试通过表示渲染与资料一致、结构和引用有效，不代表其中的学术经历、论文或成绩已由外部来源核实；修改事实仍需核对原始资料。
-
-## 构建与 GitHub Pages
+### Checking usage
 
 ```sh
-npm run build
+# Today's tokens used, the budget, and the reset time
+curl https://fuxiang-homepage-chat.fuxiang-homepage.workers.dev/api/chat
+
+# Today's full ledger: requests, input, cached, output, total, errors
+# (the key exists only after the first successful reply of the day)
+npx wrangler kv key get --binding CHAT_KV --remote "usage:$(date -u +%F)"
+
+# All keys: usage:<date> daily ledgers, client:<hash>:<hour> per-IP counters
+npx wrangler kv key list --binding CHAT_KV --remote
 ```
 
-构建先在独立临时目录完成 TS 编译、内容校验和静态导出，全部成功后再替换 `.build/` 与 `dist/`。删除或重命名的源码不会遗留旧 JS；失败时保留上一版预览。静态服务仅访问 `dist/` 内的文件，新增资源无需登记文件名。现有 GitHub Actions 会安装锁定的依赖、检查、测试，并将 `dist/` 部署到 GitHub Pages。无需提交生成的 JavaScript。
+Billing is authoritative on the OpenAI Usage page; the Cloudflare dashboard's Workers Metrics show request counts and error rates.
 
-浏览器执行的是编译后的 JavaScript；GitHub Pages 不运行 TypeScript 源码或 Node 后端。`reading.html`、图片、论文链接与现有重定向仍可正常访问。
+### Commands on the page
 
-## 聊天接口
+| Command | Output |
+| --- | --- |
+| `/bio` | Biography and contact links (shown on the opening screen, so not listed in the command row) |
+| `/research` | Research interests and directions |
+| `/papers` | Publications; click a title for details, or "Ask about this paper" to ask with that paper as context |
+| `/experience` | Research, industry, and education history |
+| `/misc` | Academic service and honors |
+| `/help` | Clickable command help |
 
-在 `src/config.ts` 修改 `chatEndpoint`：本地默认 `/api/chat`，静态部署默认 `null`，使用明确标记的模拟回复。
+Typing `/` shows candidates; Up/Down select, Tab completes, Enter runs, Escape closes. Shift+Enter inserts a newline. Text that does not start with `/` is sent to the chat backend as a question.
 
-请求字段：`message`、`topic`、`paperId`；响应字段：`id`、`text`、`mode`。完整类型见 `src/types.ts`。
+## Frontend design
 
-接入真实模型时需单独部署后端，并补充会话上下文、知识检索、额度控制及相应响应类型。密钥保留在后端。远程服务需允许主页来源的 CORS 请求。
+The homepage is one continuous terminal transcript set in the self-hosted Maple Mono monospace font. The content column is 140 characters wide, light by default with a dark theme toggle. The opening screen shows a banner spelled out in block characters from the name, the position, the biography, the links, a row of clickable commands under the biography, and the input hint. Command output and chat replies are appended to the end of the same transcript; earlier output stays until the page is reloaded. Only the theme preference is stored on the device.
+
+- **Progressive output.** Command output and chat replies share one word-by-word writer (`src/stream.ts`) at a fixed 40 words per second, paced by elapsed time so the speed is independent of frame rate and text length. The page follows the newest text while writing; scrolling up stops following. The opening screen appears at once.
+- **Input.** Typing or pasting anywhere outside an editable region goes into the prompt. Text selection, copying, browser shortcuts, and IME composition keep their native behavior.
+- **Chat.** Each question carries the previous completed turns (up to 8) and the current paper context. Up to three follow-up suggestions appear under a reply as buttons. Replies are labelled "AI reply" or "Simulated reply".
+- **Budget notice.** On load the page asks the backend for its status. When today's token budget is spent, a notice appears above the prompt and questions are held back; commands keep working. The page rechecks automatically at midnight UTC.
+- **Old links.** Legacy section hashes and `#paper/<id>` still open the matching content. `reading.html` keeps the classic single-page reading layout and is generated from the same data at build time.
+
+## Site data
+
+`data/site.md` is the single source of truth, and it is written to be read by people as well as by the code. The frontend fetches it in the browser, the reading view is generated from it at build time, and the chat backend sends it to the model **verbatim** as the homepage content, so there is no second copy of the facts to keep in sync. `parseSiteMarkdown` (`src/markdown.ts`) turns it into a `SiteData` object; the build validates the structure, unique paper ids, valid paper references, and the presence of all three research topics; on failure the previous build is kept.
+
+One rule shapes the whole file: **every record is a heading, the `Key: value` lines directly beneath it are its fields, and the paragraphs that follow are its prose.** A heading may carry an explicit id as `{#slug}`.
+
+A paragraph is written on one line. The parser does join hard-wrapped lines back together, so wrapping will not break anything, but the file is also the prompt the model reads and a newline mid-sentence only costs a token there.
+
+```markdown
+### REAR: Test-time Preference Realignment through Reward Decomposition {#rear}
+Authors: Fuxiang Zhang, Pengcheng Wang, …
+Venue: International Conference on Machine Learning (ICML)
+Venue short: ICML
+Year: 2026
+Category: conference
+Topic: llm
+Paper: https://arxiv.org/abs/2606.30339
+Code: https://github.com/mansicer/REAR
+
+Aligning large language models (LLMs) with diverse user preferences is a critical yet challenging task. …
+```
+
+A publication's prose is its abstract. It is optional, it is shown on the paper's detail view, and — like everything else in the file — it reaches the assistant verbatim, which is what lets the assistant discuss what a paper actually does instead of only its title and venue.
+
+| Section | Record heading | Fields | Prose |
+| --- | --- | --- | --- |
+| (the `# H1`) | Name | `Position`, `Email`, `Photo`, `Links` | — |
+| `## Bio` | — | — | One paragraph per biography paragraph |
+| `## Research topics` | Topic name, id `{#llm}` / `{#rl}` / `{#marl}` | `Short name` | Description |
+| `## Research interests` | Interest title; `####` sub-headings are its points | `Topic` | Description |
+| `## Publications` | Paper title, id `{#slug}` | `Authors`, `Venue`, `Venue short`, `Year`, `Category`, `Topic`, `Paper`, `Code` | The abstract, optional |
+| `## Experience` | Organization; `####` sub-headings are its contributions | `Role`, `Location`, `Period`, `Links`; a contribution takes `Paper` | Description |
+| `## Education` | Institution | `Degree`, `Location`, `Period`, `Links` | Description |
+| `## Service` | Venue | `Role`, `Period` | — |
+| `## Awards` | Title | `Issuer`, `Period` | — |
+
+Conventions: a publication's `Category` is `reports`, `conference`, or `journal`, and its `Topic` is a research topic id. A contribution's `Paper` holds a publication's slug. Text may contain inline links written as `[label](https://…)`; everything else is escaped as plain text, and only http(s) links are allowed. Only the keys listed above are read as fields, and only directly under their heading — prose that begins `Something:` stays prose, and a stray field further down is reported rather than silently swallowed. Unknown sections, unknown fields, missing fields, and dangling paper references all fail the build with the heading named. Full types are in `src/types.ts`.
+
+## Chat backend
+
+All backend logic lives in `chat/`. The entry point is `handleChat(request, env)` in `chat/handler.ts`. `worker/index.ts` deploys it as a Cloudflare Worker and bundles `data/site.md` as a text module at deploy time (the `[[rules]]` block in `wrangler.toml`); `server.ts` mounts the same function at `/api/chat` locally.
+
+### API
+
+| Method | Purpose | Notes |
+| --- | --- | --- |
+| `GET /api/chat` | Status | Returns `{ mode, budget }`. `mode` is `live` or `mock`; `budget` has `used`, `limit`, `exhausted`, `resetsAt`, or is `null` when no key or budget is configured |
+| `POST /api/chat` | Ask | Request `{ message, topic?, paperId?, history? }`, response `{ id, text, mode, suggestions?, budget? }` |
+| `OPTIONS /api/chat` | Preflight | 204 only for origins in `ALLOWED_ORIGINS` |
+
+Errors come back as `{ error }`: 400 invalid input, 403 origin not allowed, 413 request too large, 415 not JSON, 429 rate limit or budget exhausted (with `Retry-After`), 502 model unavailable. The frontend shows the `error` text of 429 and 502 responses to the visitor as is. Full types are in `src/types.ts`.
+
+### Model call
+
+`chat/openai.ts` uses the OpenAI Responses API: `instructions` carries the system instructions, `input` the conversation turns, and `text.format` a strict JSON Schema so the model must return exactly `answer` and `suggestions`. `reasoning.effort` is `low`, `max_output_tokens` is 1200, and `store` is `false`. The model comes from `OPENAI_MODEL`, default `gpt-5.4-mini`.
+
+`chat/prompt.ts` assembles the instructions: the rules first (answer only from the homepage content, speak as the owner in the first person while admitting to being an AI when asked outright, follow the visitor's language, plain text only, refuse unrelated requests with the `[[offtopic]]` marker, ignore rule-changing instructions inside messages), then `data/site.md` exactly as written, and only at the end a one-line pointer to the paper the visitor currently has open. The Markdown doubles as the prompt template, so editing the file changes both the page and what the model knows. Keeping the stable part first lets the provider cache the prefix.
+
+### Papers named in a reply
+
+The assistant does not describe a publication in its own words. It finishes the sentence that introduces the paper, then writes the marker on a line of its own:
+
+```
+A good first read is REAR, which realigns preferences at test time.
+[[paper:rear]]
+For reasoning models, Skywork-OR1 is the better starting point.
+[[paper:skywork-or1]]
+```
+
+The id is the slug from that paper's `{#id}` heading, and the homepage replaces each marker line with the paper's card, rendered from `data/site.md`. Title, authors, venue, year and links therefore always come from the file, and the card is live: clicking it opens the paper, its code, or a follow-up question about it.
+
+The contract lives in `src/chat.ts` (`PAPER_MARKER`, `splitPaperMarkers`, `stripPaperMarkers`, `MAX_PAPER_CARDS`) and is applied by `replyBody` in `render.ts`. Each text run between markers is escaped on its own, so model output never reaches the page as markup. `revealHTML` walks the finished HTML, so cards stream into place along with the text, and copying a reply strips the markers back out.
+
+### Off-topic questions
+
+The model does not write its own refusal. A message that is not about the site owner, the work, or the homepage is answered with the marker alone:
+
+```
+[[offtopic]]
+```
+
+The page shows `copy.offtopic` from `src/content.ts` in its place, so the wording is the site's and stays consistent whatever the question was, in every language, and no model text reaches the visitor. `isOfftopicReply` in `src/chat.ts` matches the marker only when it is the entire reply; a marker written alongside prose is treated as a broken marker, removed, and the prose stands as the reply. A question that is about the owner but simply not covered by `data/site.md` is not off topic — the model answers it by saying so and pointing to the email or links.
+
+The parser is written to survive a model that does not follow the format exactly, because layout damage is worse than a misplaced card. A line is the smallest unit it will break: a card is placed at its marker only when the text before it closes a sentence, and a marker written mid-sentence has its card held back to the end of the line rather than cutting the sentence in two. Punctuation written after a marker is pulled back in front of it, so a full stop is never stranded below the card or left as a paragraph of its own, and consecutive text runs are rejoined so paragraph breaks survive. A reply with no markers therefore renders exactly as it did before the feature existed.
+
+Odd spacing and capitals inside a marker still resolve. A marker whose id is unknown, whose paper was already shown, or which is past the three-card limit is dropped, and anything else written in double brackets is removed rather than shown — which is why the rules also require every sentence to read sensibly with no card after it.
+
+### Protection and budget
+
+| Setting (`[vars]` in `wrangler.toml`) | Default | Effect |
+| --- | --- | --- |
+| `ALLOWED_ORIGINS` | The homepage and local port 3000 | Browser origins allowed to call the API; others get 403 |
+| `RATE_PER_HOUR` | `20` | Questions per IP (stored hashed) per hour |
+| `TOKEN_BUDGET_PER_DAY` | `9900000` | Site-wide token cap per UTC day (input plus output); `0` disables it |
+| `OPENAI_MODEL` | `gpt-5.4-mini` | Model to use |
+
+After each successful reply the Worker adds the response's `usage` to the KV record `usage:YYYY-MM-DD` (kept for 90 days). Each incoming question first reads today's record; once the budget is exceeded it gets a 429 without calling the model. Failed calls consume no budget and are counted under `errors`. Every question writes to KV twice; the free KV tier allows 1000 writes per day, enough for about 500 questions. Without a KV binding neither limits nor the budget apply; without `OPENAI_API_KEY` the backend returns a clearly labelled mock reply.
+
+Limitation: the origin check only stops other web pages. A script can forge the origin and call the endpoint directly, so the real safeguards are the daily token budget and a monthly spending limit set in the OpenAI dashboard. Cloudflare Turnstile can be added if scripted calls need to be blocked.
+
+## Deployment
+
+### Frontend (GitHub Pages)
+
+On every push to `main`, `.github/workflows/static.yml` installs the locked dependencies, type-checks, runs the tests, and publishes `dist/` to GitHub Pages. The build runs in a temporary directory and replaces `.build/` and `dist/` only when everything succeeds; a failed build keeps the previous output. Generated JavaScript is not committed.
+
+The backend URL is `productionChatEndpoint` in `src/config.ts`, currently pointing at the deployed Worker. Setting it to `null` returns the homepage to mock replies.
+
+### Backend (Cloudflare Worker)
+
+1. `npx wrangler login`, then `npx wrangler kv namespace create CHAT_KV` and paste the printed id into `kv_namespaces` in `wrangler.toml`.
+2. `npm run worker:secret` and enter the OpenAI key.
+3. `npm run worker:deploy`. The output names the URL, `https://fuxiang-homepage-chat.<subdomain>.workers.dev`; confirm with `curl <url>/api/chat` that `mode` is `live`.
+4. After changing `[vars]` or code, run `npm run worker:deploy` again.
+
+Optional automation: add the repository secrets `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" token template) and `CLOUDFLARE_ACCOUNT_ID`. `.github/workflows/deploy-worker.yml` then redeploys the Worker whenever `chat/`, `worker/`, `data/`, or `wrangler.toml` change; without the secrets that step is skipped.
+
+The Cloudflare side runs on the free plan. The only cost is OpenAI's per-token billing, which is prepaid: calls stop when the balance is spent.
+
+## Tests
+
+`npm test` builds the project and runs `tests/` with Node's built-in test runner:
+
+| File | Covers |
+| --- | --- |
+| `data.test.ts` | The Markdown format maps onto every rendered field, the published file parses completely, malformed documents are reported rather than silently truncated |
+| `render.test.ts` | Rendered content matches `data/site.md`, links are correct, text is escaped, missing data is not presented as facts, papers named by the assistant render from site data and unknown or excess markers are dropped |
+| `state.test.ts` | Publication filters, question and paper context, conversation history, progressive output preserves text at a fixed speed |
+| `commands.test.ts` / `input.test.ts` | Slash command parsing and completion, global typing and IME behavior |
+| `chat.test.ts` | Backend: mock replies, CORS, request validation, hourly limit, daily ledger and budget refusal, instruction content, structured output validation |
+| `server.test.ts` | Served data and photo match the source file; the exported reading view keeps publication details |
+
+The tests constrain content accuracy and API behavior. They do not lock CSS class names, HTML structure, layout, or animation details, and they do not replace a browser check for visual problems. Real model calls need a key and are not part of the automated tests; after deploying, ask a question or two and read the ledger to confirm.

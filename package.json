@@ -4,16 +4,23 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build && node .build/scripts/dev.js",
-    "start": "npm run build && node .build/server.js",
+    "start": "npm run build && node --env-file-if-exists=.env .build/server.js",
     "check": "tsc --noEmit",
     "build": "node scripts/build.mjs",
-    "test": "npm run build && node --test .build/tests/*.test.js"
+    "test": "npm run build && node --test .build/tests/*.test.js",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy",
+    "worker:secret": "wrangler secret put OPENAI_API_KEY"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.9"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "wrangler": "^4.129.0"
+  },
+  "dependencies": {
+    "openai": "^7.10.0"
   }
 }

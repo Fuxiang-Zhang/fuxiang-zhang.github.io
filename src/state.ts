@@ -1,9 +1,8 @@
 import {
   emptySite, isTopic, topics,
-  type AssistantMessage, type Content, type ContentMessage, type Filters, type Page, type Publication, type Thread,
+  type AssistantMessage, type Category, type ChatTurn, type Content, type ContentMessage, type Page, type Publication, type ResearchTopic, type Thread,
 } from './types.js';
 
-export const emptyFilters = (): Filters => ({ query: '', year: '', topic: '', category: '' });
 export const makeThread = (id: string, topic: Page): Thread => ({
   id, topic, messages: [], draft: '', scroll: 0, paperId: null,
 });
@@ -16,7 +15,6 @@ export function createState() {
     current: threads.get('bio')!,
     site: emptySite(),
     loadFailed: false,
-    filters: emptyFilters(),
     paper: null as { id: string; returnHash: string } | null,
   };
 }
@@ -57,19 +55,6 @@ export function pruneEmptyChats(state: AppState, keep?: Thread) {
   });
 }
 
-/** Moves a question typed in a session into its own conversation, which is opened only when the question is sent. */
-export function startConversation(state: AppState, thread: Thread, id: string, paper?: Publication): Thread {
-  const chat = makeThread(id, 'chat');
-  chat.paperId = paper?.id ?? null;
-  if (paper) chat.title = paper.title;
-  chat.draft = thread.draft;
-  thread.paperId = null;
-  thread.draft = '';
-  state.threads.set(chat.id, chat);
-  state.chatOrder.push(chat.id);
-  return chat;
-}
-
 /** Retrying reuses the original prompt/context without consuming the next message's draft. */
 export function prepareReply(thread: Thread, retryId?: string): AssistantMessage | undefined {
   const retry = retryId ? thread.messages.find((message): message is AssistantMessage =>
@@ -92,21 +77,35 @@ export function prepareReply(thread: Thread, retryId?: string): AssistantMessage
   return reply;
 }
 
+/** Recent completed turns before `replyId`, sent along with a question so the model can follow the conversation. */
+export function conversationHistory(thread: Thread, replyId: string, limit = 8): ChatTurn[] {
+  const turns: ChatTurn[] = [];
+  for (const message of thread.messages) {
+    if (message.id === replyId) break;
+    if (message.role === 'user') turns.push({ role: 'user', text: message.text });
+    else if (message.role === 'assistant' && message.state === 'done') turns.push({ role: 'assistant', text: message.text });
+  }
+  // The question right before the reply is sent as `message`, not repeated in the history.
+  if (turns.at(-1)?.role === 'user') turns.pop();
+  return turns.slice(-limit);
+}
+
 /** Appends site content as a reply, reusing the previous message when the same content was just shown. */
-export function showContent(thread: Thread, content: Content): ContentMessage {
+export function showContent(thread: Thread, content: Content, repeat = false): ContentMessage {
   const last = thread.messages.at(-1);
-  if (last?.role === 'content' && JSON.stringify(last.content) === JSON.stringify(content)) return last;
+  if (!repeat && last?.role === 'content' && JSON.stringify(last.content) === JSON.stringify(content)) return last;
   const message: ContentMessage = { id: crypto.randomUUID(), role: 'content', content };
   thread.messages.push(message);
   return message;
 }
 
-export function filterPublications(publications: Publication[], filters: Filters): Publication[] {
-  const query = filters.query.toLocaleLowerCase().trim();
+/** Newest first, narrowed to one publication type or research topic when the content asks for it. */
+export function filterPublications(
+  publications: Publication[],
+  filters: { category?: Category; topic?: ResearchTopic },
+): Publication[] {
   return publications.filter(paper =>
-    (!query || `${paper.title} ${paper.authors} ${paper.venue}`.toLocaleLowerCase().includes(query))
-    && (!filters.year || String(paper.year) === filters.year)
-    && (!filters.topic || paper.topic === filters.topic)
-    && (!filters.category || paper.category === filters.category))
+    (!filters.category || paper.category === filters.category)
+    && (!filters.topic || paper.topic === filters.topic))
     .sort((a, b) => b.year - a.year);
 }

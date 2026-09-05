@@ -1,0 +1,32 @@
+# Cloudflare Worker that serves POST /api/chat for the GitHub Pages homepage.
+# Deploy: npm run worker:deploy   (needs `npx wrangler login` once, or CLOUDFLARE_API_TOKEN)
+# Secret: npx wrangler secret put OPENAI_API_KEY
+name = "fuxiang-homepage-chat"
+main = "worker/index.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# data/site.md is the homepage content; bundle it as a text module.
+[[rules]]
+type = "Text"
+globs = ["**/*.md"]
+fallthrough = true
+
+[observability]
+enabled = true
+
+[vars]
+OPENAI_MODEL = "gpt-5.4-mini"
+# Exact browser origins allowed to call the API, comma-separated.
+ALLOWED_ORIGINS = "https://fuxiang-zhang.github.io,http://localhost:3000,http://127.0.0.1:3000"
+# Questions per visitor (by IP) per hour.
+RATE_PER_HOUR = "20"
+# Total tokens (input + output) the assistant may use per UTC day across all visitors. 0 disables the budget.
+TOKEN_BUDGET_PER_DAY = "9900000"
+
+# Rate-limit counters and the daily token ledger. Create the namespace once and paste its id:
+#   npx wrangler kv namespace create CHAT_KV
+# Without this binding the worker runs with no rate limits and no token budget.
+[[kv_namespaces]]
+binding = "CHAT_KV"
+id = "59b26f84f9524f288071d9ca0aae8de1"

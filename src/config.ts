@@ -1,6 +1,19 @@
-/** Set a deployed backend URL here when ready; null uses the static demo. */
+/**
+ * The deployed chat backend: the Cloudflare Worker (worker/index.ts). Both the
+ * published homepage and the local preview call it by default, so the local
+ * preview exercises the real backend. Set to null to fall back to mock replies.
+ */
+export const productionChatEndpoint: string | null = 'https://fuxiang-homepage-chat.fuxiang-homepage.workers.dev/api/chat';
+/**
+ * Local testing switch, read from the page URL:
+ *   ?chat=mock   labelled mock replies, no backend call
+ *   ?chat=local  the local Node server's /api/chat (live only with OPENAI_API_KEY in .env)
+ * Anything else, including no parameter, uses the worker.
+ */
+const chatOverride = new URLSearchParams(location.search).get('chat');
+const isLocalHost = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 export const siteConfig: { chatEndpoint: string | null } = {
-  chatEndpoint: ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? '/api/chat' : null,
+  chatEndpoint: chatOverride === 'mock' ? null : chatOverride === 'local' && isLocalHost ? '/api/chat' : productionChatEndpoint,
 };
 
 declare global { interface Window { dataLayer?: unknown[][] } }

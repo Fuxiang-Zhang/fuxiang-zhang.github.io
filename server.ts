@@ -2,8 +2,10 @@ import http from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mockReply } from './src/chat.js';
-import { isRecord } from './src/types.js';
+import { handleChat, type ChatEnv } from './chat/handler.js';
+import { MemoryStore } from './chat/limits.js';
+import { loadSiteData } from './src/markdown.js';
+import type { SiteData } from './src/types.js';
 
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
 const mimeTypes: Record<string, string> = {
@@ -12,6 +14,7 @@ const mimeTypes: Record<string, string> = {
   '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.ico': 'image/x-icon',
   '.pdf': 'application/pdf', '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2',
+  '.md': 'text/markdown; charset=utf-8',
 };
 function inside(root: string, path: string): boolean {
   const child = relative(root, path);
@@ -23,6 +26,26 @@ function json(res: http.ServerResponse, status: number, value: unknown) {
   res.end(JSON.stringify(value));
 }
 
+/*
+ * Local chat backend: the same handler as the Cloudflare Worker, fed with the
+ * exported site data. With OPENAI_API_KEY set (e.g. in .env) replies are live;
+ * otherwise they are the labelled mock. Rate limits are kept generous locally.
+ */
+const store = new MemoryStore();
+let site: Promise<SiteData> | undefined;
+async function chatEnv(publicRoot: string, host = 'localhost'): Promise<ChatEnv> {
+  site ??= loadSiteData(path => readFile(join(publicRoot, path), 'utf8'));
+  return {
+    site: await site,
+    openaiKey: process.env.OPENAI_API_KEY || undefined,
+    model: process.env.OPENAI_MODEL || undefined,
+    allowedOrigins: [`http://${host}`],
+    store,
+    perHour: 200,
+    tokenBudget: Number(process.env.TOKEN_BUDGET_PER_DAY) || undefined,
+  };
+}
+
 export function createServer(publicRoot = root) {
   return http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -30,22 +53,21 @@ export function createServer(publicRoot = root) {
     try { pathname = decodeURIComponent(new URL(req.url || '/', 'http://localhost').pathname); }
     catch { return json(res, 400, { error: 'Invalid URL.' }); }
     if (pathname === '/api/chat') {
-      if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); return json(res, 405, { error: 'Use POST.' }); }
-      if (!req.headers['content-type']?.startsWith('application/json')) return json(res, 415, { error: 'Expected JSON.' });
-      try {
-        let body = '';
-        for await (const chunk of req) {
-          body += chunk;
-          if (Buffer.byteLength(body) > 12000) return json(res, 413, { error: 'Request too large.' });
-        }
-        let input: unknown;
-        try { input = JSON.parse(body); } catch { return json(res, 400, { error: 'Invalid JSON.' }); }
-        if (!isRecord(input) || typeof input.message !== 'string' || !input.message.trim() || input.message.length > 2000) {
-          return json(res, 400, { error: 'Message must contain 1–2000 characters.' });
-        }
-        return json(res, 200, mockReply());
-      } catch { if (!res.writableEnded) json(res, 500, { error: 'Could not process request.' }); }
-      return;
+      let body = '';
+      for await (const chunk of req) {
+        body += chunk;
+        if (Buffer.byteLength(body) > 64_000) return json(res, 413, { error: 'Request too large.' });
+      }
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(req.headers)) {
+        if (typeof value === 'string') headers.set(name, value);
+      }
+      const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/api/chat'}`, {
+        method: req.method, headers, body: ['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? '') ? undefined : body,
+      });
+      const response = await handleChat(request, await chatEnv(publicRoot, req.headers.host));
+      res.writeHead(response.status, Object.fromEntries(response.headers));
+      return res.end(Buffer.from(await response.arrayBuffer()));
     }
     if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: 'Method not allowed.' });
     try {
@@ -80,5 +102,13 @@ export function createServer(publicRoot = root) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 3000);
   const host = process.env.HOST || '127.0.0.1';
-  createServer().listen(port, host, () => console.log(`Local: http://${host}:${port}`));
+  const server = createServer();
+  server.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use, probably by an earlier preview server.\nFind it with: lsof -nP -iTCP:${port} -sTCP:LISTEN   then stop it with: kill <PID>\nOr start on another port: PORT=3001 npm run dev`);
+      process.exit(1);
+    }
+    throw error;
+  });
+  server.listen(port, host, () => console.log(`Local: http://${host}:${port}`));
 }

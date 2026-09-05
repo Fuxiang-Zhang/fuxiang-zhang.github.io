@@ -7,8 +7,8 @@
 export interface RevealOptions {
   /** Called after every batch of tokens, e.g. to keep the newest text in view. */
   onStep?: () => void;
-  /** Rough total duration in milliseconds; long replies stream faster to stay near it. */
-  targetDuration?: number;
+  /** Reveal speed in tokens per second; the same for every reply regardless of length. */
+  rate?: number;
   /** Minimum interval between batches in milliseconds. */
   tick?: number;
 }
@@ -21,21 +21,20 @@ type Step = { open: Element } | { close: true } | { text: string };
 
 /** Splits text into word-like tokens that keep their trailing whitespace. */
 export const tokenize = (text: string): string[] => text.match(/\S+\s*|\s+/g) ?? [];
-/** Tokens per batch so a reply of any length finishes close to the target duration. */
-export const tokensPerTick = (tokens: number, targetDuration: number, tick: number): number =>
-  Math.max(1, Math.ceil(tokens / Math.max(1, targetDuration / tick)));
+/** Default reveal speed: a brisk reading pace, tokens per second. */
+export const DEFAULT_RATE = 40;
+/** Tokens that should be visible after `elapsed` milliseconds at a fixed rate. */
+export const tokensDue = (elapsed: number, rate: number): number => Math.floor(Math.max(0, elapsed) * rate / 1000);
 
 export function revealHTML(target: HTMLElement, html: string, options: RevealOptions = {}): Reveal {
   const source = document.createElement('div');
   source.innerHTML = html;
   const steps: Step[] = [];
-  let tokens = 0;
   const plan = (node: Node) => {
     for (const child of Array.from(node.childNodes)) {
       if (child.nodeType === Node.TEXT_NODE) {
         for (const token of tokenize(child.textContent ?? '')) {
           steps.push({ text: token });
-          tokens += 1;
         }
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         steps.push({ open: child as Element });
@@ -47,13 +46,15 @@ export function revealHTML(target: HTMLElement, html: string, options: RevealOpt
   plan(source);
 
   const tick = options.tick ?? 24;
-  const perTick = tokensPerTick(tokens, options.targetDuration ?? 1600, tick);
+  const rate = options.rate ?? DEFAULT_RATE;
   const cursor = document.createElement('span');
   cursor.className = 'stream-cursor';
   cursor.setAttribute('aria-hidden', 'true');
   const stack: Node[] = [target];
   let current: Text | null = null;
   let index = 0;
+  let shown = 0;
+  let start = 0;
   let last = 0;
   let frame = 0;
   let settled = false;
@@ -86,13 +87,15 @@ export function revealHTML(target: HTMLElement, html: string, options: RevealOpt
   };
   const run = (now: number) => {
     if (settled) return;
+    if (!start) start = last = now;
     if (now - last >= tick) {
       last = now;
-      let budget = perTick;
+      // Time-based pacing keeps the speed steady across frame rates and reply lengths.
+      let budget = tokensDue(now - start, rate) - shown;
       while (budget > 0 && index < steps.length) {
         const step = steps[index++];
         apply(step);
-        if ('text' in step) budget -= 1;
+        if ('text' in step) { budget -= 1; shown += 1; }
       }
       // Structural steps at the end (closing tags) are free.
       while (index < steps.length && !('text' in steps[index])) apply(steps[index++]);

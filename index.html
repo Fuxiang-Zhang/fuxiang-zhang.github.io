@@ -1,45 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Explore Fuxiang Zhang’s research in large language models, reinforcement learning, and multi-agent systems. Publications, background, and a conversational research assistant.">
-  <meta name="theme-color" content="#ffffff">
-  <meta property="og:title" content="Fuxiang Zhang — A conversation with my research">
+  <meta name="theme-color" content="#fafafa">
+  <meta property="og:title" content="Fuxiang Zhang — Research Terminal">
   <meta property="og:description" content="Large language models. Reinforcement learning. Multi-agent systems. Explore the research and the person behind it.">
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/Photo.JPG">
   <meta name="twitter:card" content="summary">
-  <title>Fuxiang Zhang · Research & Conversations</title>
+  <title>Fuxiang Zhang - Homepage</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/maple-mono.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="app-shell" id="app-shell">
-    <aside class="sidebar" id="sidebar" aria-label="Sessions">
-      <div class="sidebar-top">
-        <div class="sidebar-profile" id="sidebar-profile"><a class="brand" href="#bio">Fuxiang Zhang</a></div>
-        <button class="icon-button close-menu" id="close-menu" aria-label="Close navigation"></button>
+    <header class="terminal-bar"><a href="#bio" data-command="/bio">Fuxiang Zhang - Homepage</a><span><a href="reading.html">[reading]</a> <button id="theme-toggle" aria-label="Switch color theme">[dark]</button></span></header>
+    <main class="main" id="main" tabindex="-1">
+      <div class="scroll-area" id="scroll-area">
+        <div class="content" id="content"><div id="messages" class="messages" aria-label="Terminal output"></div></div>
       </div>
-      <button class="new-chat" id="new-chat" type="button"></button>
-      <nav class="session-nav" id="topic-nav" aria-label="Sessions"></nav>
-      <nav class="chat-nav" id="recent-chats" aria-label="Conversations" hidden></nav>
-      <div class="sidebar-bottom">
-        <a href="reading.html" class="reading-link">Reading view</a>
-        <button class="icon-button" id="theme-toggle" aria-label="Switch color theme"></button>
-      </div>
-    </aside>
-    <div class="scrim" id="scrim" hidden></div>
-    <main class="main" id="main">
-      <div class="mobile-bar">
-        <button class="icon-button" id="menu-toggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"></button>
-        <span id="mobile-title"></span>
-      </div>
-      <div class="scroll-area" id="scroll-area"><div class="content" id="content"><div class="initial-loading">Loading…</div></div></div>
-      <div class="composer-region"><div class="composer-wrap"><div class="context-chip" id="context-chip" hidden></div><form class="composer" id="chat-form"><label for="message" class="sr-only">Your question</label><textarea id="message" rows="1" maxlength="2000" placeholder="Ask about my research, papers, or experience…" required></textarea><button type="submit" class="send-button" id="send-button" aria-label="Send message" disabled></button></form><p class="composer-note">Replies are simulated.</p></div></div>
+        <div class="composer-region"><div class="composer-wrap">
+          <section class="command-menu" id="command-menu" aria-label="Command suggestions" hidden>
+            <div class="command-menu-heading"><span>commands</span><button type="button" id="close-commands" aria-label="Close commands">[esc]</button></div>
+            <div id="command-options" role="listbox" aria-label="Commands"></div>
+            <p class="command-menu-note">↑↓ select · Tab complete · Enter run</p>
+          </section>
+          <div class="context-chip" id="context-chip" hidden></div>
+          <p class="command-error" id="command-error" role="status" hidden></p>
+          <p class="budget-notice" id="budget-notice" role="status" hidden></p>
+          <form class="composer" id="chat-form">
+            <label for="message" class="sr-only">Your question or command</label>
+            <span class="input-prompt" aria-hidden="true">›</span>
+            <textarea id="message" rows="1" maxlength="2000" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type /help or ask a question…" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="command-options" aria-describedby="composer-hint"></textarea>
+            <button type="submit" class="send-button" id="send-button" aria-label="Send message" disabled>[enter]</button>
+          </form>
+          <div class="composer-hint" id="composer-hint"><button type="button" data-command="/help">/help</button> · <span>Type anywhere · Shift+Enter newline</span></div>
+        </div></div>
     </main>
+    <footer class="status-bar"><span id="terminal-status">ready</span><span id="chat-mode">chat: simulated</span></footer>
   </div>
   <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
   <noscript><div class="noscript">This conversational view needs JavaScript. <a href="reading.html">Read the complete academic homepage →</a></div></noscript>

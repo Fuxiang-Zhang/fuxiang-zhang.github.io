@@ -15,15 +15,12 @@ export const isContentKind = (value: unknown): value is ContentKind => contentKi
 
 /*
  * Site data: the single source of truth for everything shown on the homepage,
- * rendered by both the chat homepage and the static reading view. It is stored
- * in three files that `loadSiteData` merges into one `SiteData` object:
- *   data/profile.json      → { profile, research, interests }
- *   data/publications.json → Publication[]
- *   data/cv.json           → { experience, education, service, awards }
+ * rendered by both the chat homepage and the static reading view. It is written
+ * as one Markdown file, `data/site.md`, which `parseSiteMarkdown` (src/markdown.ts)
+ * turns into a `SiteData` object and `parseSiteData` below validates.
  * Text fields may contain inline links written as [label](https://…);
  * everything else is treated as plain text.
  */
-export const siteFiles = { profile: 'data/profile.json', publications: 'data/publications.json', cv: 'data/cv.json' } as const;
 export interface Link { label: string; url: string }
 export interface Profile {
   name: string; position: string; photo: string; email: string;
@@ -40,6 +37,8 @@ export interface Publication {
   id: string; title: string; authors: string; venue: string; venueShort: string;
   year: number; category: Category; topic: ResearchTopic;
   links: { paper: string; code?: string };
+  /** The paper's own abstract, so the page and the assistant can discuss its content. */
+  abstract?: string;
 }
 export interface Contribution { title: string; description: string; paperId?: string }
 export interface Experience {
@@ -52,6 +51,8 @@ export interface Education {
 export interface ServiceEntry { venue: string; role: string; period?: string }
 export interface Award { title: string; issuer: string; period: string }
 export interface SiteData {
+  /** The Markdown source the data was parsed from; the chat backend sends it to the model as-is. */
+  source: string;
   profile: Profile;
   research: ResearchInterest[];
   interests: Interest[];
@@ -62,17 +63,31 @@ export interface SiteData {
   awards: Award[];
 }
 export const emptySite = (): SiteData => ({
+  source: '',
   profile: { name: '', position: '', photo: '', email: '', links: [], bio: [] },
   research: [], interests: [], publications: [], experience: [], education: [], service: [], awards: [],
 });
 
-export interface ChatRequest { message: string; topic?: Page; paperId?: string | null }
-export interface ChatReply { id: string; text: string; mode: 'mock' }
+/* Chat API contract, shared by the browser client (src/chat.ts) and the backend (chat/handler.ts). */
+export interface ChatTurn { role: 'user' | 'assistant'; text: string }
+export interface ChatRequest { message: string; topic?: Page; paperId?: string | null; history?: ChatTurn[] }
+/** `mock` replies are canned placeholders; `live` replies come from the model. */
+export type ChatMode = 'mock' | 'live';
+/** Today's token budget as reported by the backend; `resetsAt` is the next UTC midnight. */
+export interface BudgetStatus { used: number; limit: number; exhausted: boolean; resetsAt: string }
+export interface ChatReply { id: string; text: string; mode: ChatMode; budget?: BudgetStatus }
+/** Answer to GET /api/chat: what kind of replies to expect and whether the budget allows questions right now. */
+export interface ChatStatus { mode: ChatMode; budget: BudgetStatus | null }
 export interface AssistantMessage {
   id: string; role: 'assistant'; text: string; prompt: string; paperId: string | null;
   state: 'pending' | 'done' | 'error' | 'stopped';
+  mode?: ChatMode;
+  /** Server-provided explanation shown instead of the generic failure text. */
+  error?: string;
 }
 export type Content =
+  | { kind: 'preset'; topic: Topic }
+  | { kind: 'help' }
   | { kind: 'research' }
   | { kind: 'publications'; category?: Category; topic?: ResearchTopic }
   | { kind: 'paper'; paperId: string };
@@ -80,7 +95,6 @@ export interface ContentMessage { id: string; role: 'content'; content: Content 
 export type Message = { id: string; role: 'user'; text: string } | AssistantMessage | ContentMessage;
 /** `intro` marks a conversation opened from the New chat button; it shows the greeting and suggested questions. */
 export interface Thread { id: string; topic: Page; messages: Message[]; draft: string; scroll: number; paperId: string | null; title?: string; intro?: boolean }
-export interface Filters { query: string; year: string; topic: ResearchTopic | ''; category: Category | '' }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -101,6 +115,7 @@ export function parsePublications(value: unknown): Publication[] {
     && typeof p.year === 'number' && Number.isInteger(p.year)
     && isCategory(p.category)
     && isResearchTopic(p.topic)
+    && optionalStrings(p, ['abstract'])
     && isRecord(p.links) && isString(p.links.paper) && optionalStrings(p.links, ['code']), 'publication');
 }
 const isContribution = (c: unknown): c is Contribution => isRecord(c) && strings(c, ['title', 'description']) && optionalStrings(c, ['paperId']);
@@ -118,6 +133,7 @@ export function parseSiteData(value: unknown): SiteData {
   const ids = new Set(publications.map(paper => paper.id));
   if (ids.size !== publications.length) throw new Error('Duplicate publication ids.');
   const site: SiteData = {
+    source: typeof value.source === 'string' ? value.source : '',
     profile: value.profile,
     research: list(value.research, (r: unknown): r is ResearchInterest => isRecord(r) && isResearchTopic(r.id) && strings(r, ['name', 'shortName', 'description']), 'research'),
     interests: list(value.interests, isInterest, 'interests'),
@@ -137,11 +153,4 @@ export function parseSiteData(value: unknown): SiteData {
     if (contribution.paperId && !ids.has(contribution.paperId)) throw new Error(`Unknown publication: ${contribution.paperId}.`);
   }
   return site;
-}
-
-/** Reads the three data files with the supplied JSON reader and merges them into validated site data. */
-export async function loadSiteData(readJSON: (path: string) => Promise<unknown>): Promise<SiteData> {
-  const [profile, publications, cv] = await Promise.all([siteFiles.profile, siteFiles.publications, siteFiles.cv].map(readJSON));
-  if (!isRecord(profile) || !isRecord(cv)) throw new Error('Invalid site data.');
-  return parseSiteData({ ...profile, publications, ...cv });
 }

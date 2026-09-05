@@ -1,10 +1,13 @@
-import { requestReply } from './chat.js';
+import { ChatError, isOfftopicReply, requestReply, requestStatus, stripPaperMarkers } from './chat.js';
 import { siteConfig } from './config.js';
 import { copy, type CopyKey } from './content.js';
-import { createRenderer, icon } from './render.js';
-import { createState, isKeptChat, makeThread, navigate, prepareReply, pruneEmptyChats, showContent, startConversation } from './state.js';
+import { commands, matchCommands, parseInput, type Command } from './commands.js';
+import { typingAction } from './input.js';
+import { createRenderer, escapeHTML } from './render.js';
+import { conversationHistory, createState, makeThread, prepareReply, showContent } from './state.js';
 import { revealHTML, type Reveal } from './stream.js';
-import { isCategory, isContentKind, isRecord, isResearchTopic, loadSiteData, type Content, type Publication } from './types.js';
+import { isCategory, isContentKind, isTopic, isResearchTopic, type BudgetStatus, type ChatMode, type Content, type Publication } from './types.js';
+import { loadSiteData } from './markdown.js';
 
 function $<T extends HTMLElement = HTMLElement>(selector: string): T {
   const element = document.querySelector<T>(selector);
@@ -21,6 +24,7 @@ function savePreference(key: string, value: string) {
 }
 
 const state = createState();
+state.current = makeThread('terminal', 'chat');
 const pending = new Map<string, AbortController>();
 /** Replies that stream in on their next render, and the streams currently running. */
 const revealNext = new Set<string>();
@@ -28,32 +32,33 @@ const reveals = new Map<string, Reveal>();
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const input = $<HTMLTextAreaElement>('#message');
 const scrollArea = $('#scroll-area');
-const sidebar = $('#sidebar');
-let theme = readPreference('fz-theme', matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') === 'dark' ? 'dark' : 'light';
+let theme = readPreference('fz-terminal-theme', 'light') === 'dark' ? 'dark' : 'light';
+/** What the backend reported: reply mode and today's token budget. */
+let chatMode: ChatMode | undefined;
+let budget: BudgetStatus | null = null;
+let budgetTimer: ReturnType<typeof setTimeout> | undefined;
+let candidates: readonly Command[] = [];
+let selectedCommand = 0;
 const t = (key: CopyKey): string => copy[key];
 const view = () => createRenderer(state);
 const getPaper = (id: string | null) => state.site.publications.find(paper => paper.id === id);
 const announce = (message: string) => { $('#announcement').textContent = message; };
 
-function saveView() {
-  state.current.scroll = scrollArea.scrollTop;
-  state.current.draft = input.value;
-}
-function renderMessages() {
+function renderMessages(followLatest = true) {
   for (const reveal of reveals.values()) reveal.cancel();
   reveals.clear();
   $('#messages').innerHTML = view().messages(state.current);
   for (const id of revealNext) {
     const body = document.querySelector<HTMLElement>(`#message-${CSS.escape(id)} .message-body`);
-    if (body) startReveal(id, body);
+    if (body) startReveal(id, body, followLatest);
   }
   revealNext.clear();
 }
 const nearBottom = () => scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight < 48;
 /** Streams a rendered reply into view, following the newest text until the reader scrolls away. */
-function startReveal(id: string, body: HTMLElement) {
+function startReveal(id: string, body: HTMLElement, followLatest: boolean) {
   if (reduceMotion.matches) return;
-  let following = true;
+  let following = followLatest;
   const onScroll = () => { following = nearBottom(); };
   scrollArea.addEventListener('scroll', onScroll);
   scrollArea.style.scrollBehavior = 'auto';
@@ -63,41 +68,51 @@ function startReveal(id: string, body: HTMLElement) {
   reveals.set(id, reveal);
   void reveal.done.then(() => {
     scrollArea.removeEventListener('scroll', onScroll);
-    reveals.delete(id);
+    if (reveals.get(id) === reveal) reveals.delete(id);
     if (!reveals.size) scrollArea.style.scrollBehavior = '';
   });
 }
-function renderNavigation() {
-  const { current, threads, chatOrder } = state;
-  const chats = chatOrder.flatMap(id => threads.get(id) ?? []).filter(isKeptChat);
-  const navigation = view().navigation(current, chats);
-  $('#sidebar-profile').innerHTML = view().profileCard();
-  $('#topic-nav').innerHTML = navigation.main;
-  $('#recent-chats').innerHTML = navigation.history;
-  $('#recent-chats').hidden = !navigation.history;
-  $('#mobile-title').textContent = current.topic === 'chat' ? current.title || t('chatTitleShort') : t(current.topic);
+/** The status bar names the reply source: the configured backend until the backend reports, then what it actually returned. */
+function renderChatMode(mode = chatMode) {
+  chatMode = mode;
+  $('#chat-mode').textContent = t(budget?.exhausted ? 'chatBudget'
+    : mode === 'live' ? 'chatLive' : mode === 'mock' ? 'chatMock' : siteConfig.chatEndpoint ? 'chatConnected' : 'chatMock');
+}
+const budgetText = (status: BudgetStatus) => t('budgetNotice').replace('{time}',
+  new Date(status.resetsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }));
+/** Shows the exhausted-budget notice above the prompt and rechecks once the budget resets. */
+function applyBudget(status: BudgetStatus | null | undefined) {
+  if (status === undefined) return;
+  budget = status;
+  const notice = $('#budget-notice');
+  notice.hidden = !status?.exhausted;
+  notice.textContent = status?.exhausted ? budgetText(status) : '';
+  renderChatMode();
+  clearTimeout(budgetTimer);
+  if (status?.exhausted) {
+    const wait = Math.min(Math.max(Date.parse(status.resetsAt) - Date.now(), 60_000) + 1000, 2_147_000_000);
+    budgetTimer = setTimeout(() => void refreshStatus(), wait);
+  }
+}
+async function refreshStatus() {
+  if (!siteConfig.chatEndpoint) return;
+  try {
+    const status = await requestStatus(siteConfig.chatEndpoint);
+    renderChatMode(status.mode);
+    applyBudget(status.budget);
+  } catch { /* The status is a convenience; sending a question still reports the real outcome. */ }
 }
 function renderTheme() {
   document.documentElement.dataset.theme = theme;
-  $('#theme-toggle').innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
+  $('#theme-toggle').textContent = theme === 'dark' ? '[light]' : '[dark]';
   $('#theme-toggle').setAttribute('aria-label', t(theme === 'dark' ? 'themeLight' : 'themeDark'));
-}
-function render() {
-  renderTheme();
-  document.title = `Fuxiang Zhang · ${t(state.current.topic === 'chat' ? 'chatTitleShort' : state.current.topic)}`;
-  $('#content').innerHTML = view().page(state.current.topic, state.current.topic !== 'chat' || state.current.intro === true);
-  input.placeholder = t('placeholder');
-  input.value = state.current.draft;
-  renderNavigation();
-  renderMessages();
-  updateComposer();
-  scrollArea.scrollTop = state.current.scroll;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#17191b' : '#fafafa');
 }
 function updateComposer() {
   const busy = pending.has(state.current.id);
   const send = $<HTMLButtonElement>('#send-button');
   send.disabled = !busy && !input.value.trim();
-  send.innerHTML = icon(busy ? 'stop' : 'send');
+  send.textContent = busy ? '[stop]' : '[enter]';
   send.setAttribute('aria-label', t(busy ? 'stop' : 'send'));
   input.readOnly = busy;
   $('#chat-form').setAttribute('aria-busy', String(busy));
@@ -106,6 +121,10 @@ function updateComposer() {
   const paper = getPaper(state.current.paperId);
   $('#context-chip').hidden = !paper;
   $('#context-chip').innerHTML = view().paperContext(paper);
+  const last = state.current.messages.at(-1);
+  const status = busy ? 'preparing reply' : last?.role === 'assistant' && last.state === 'error' ? 'reply failed'
+    : last?.role === 'assistant' && last.state === 'stopped' ? 'reply stopped' : 'ready';
+  $('#terminal-status').textContent = status;
 }
 function scrollToLatest() {
   scrollArea.scrollTop = scrollArea.scrollHeight;
@@ -113,53 +132,66 @@ function scrollToLatest() {
 function scrollToMessage(id: string) {
   const element = document.getElementById(`message-${id}`);
   if (!element) return;
-  scrollArea.scrollTop = element.offsetTop - 16;
+  scrollArea.scrollTop += element.getBoundingClientRect().top - scrollArea.getBoundingClientRect().top - 16;
 }
-function setMenu(open: boolean) {
-  sidebar.classList.toggle('open', open);
-  $('#scrim').hidden = !open;
-  $('#menu-toggle').setAttribute('aria-expanded', String(open));
+function closeCommands() {
+  candidates = [];
+  $('#command-menu').hidden = true;
+  input.setAttribute('aria-expanded', 'false');
+  input.removeAttribute('aria-activedescendant');
 }
-/** Appends site content to the current conversation as a reply and scrolls to it. */
-function show(content: Content) {
-  const before = state.current.messages.length;
-  const message = showContent(state.current, content);
-  if (state.current.messages.length > before) revealNext.add(message.id);
-  renderMessages();
-  scrollToMessage(message.id);
+function renderCommands() {
+  $('#command-menu').hidden = !candidates.length;
+  input.setAttribute('aria-expanded', String(Boolean(candidates.length)));
+  if (!candidates.length) { input.removeAttribute('aria-activedescendant'); return; }
+  $('#command-options').innerHTML = candidates.map((command, index) =>
+    `<div class="command-option" role="option" id="command-option-${index}" aria-selected="${index === selectedCommand}" data-command="${command.name}"><span>${command.name}</span><span>${escapeHTML(command.description)}</span><span aria-hidden="true">↵</span></div>`).join('');
+  input.setAttribute('aria-activedescendant', `command-option-${selectedCommand}`);
+  document.getElementById(`command-option-${selectedCommand}`)?.scrollIntoView({ block: 'nearest' });
 }
-function route() {
-  saveView();
-  const historyState: unknown = history.state;
-  const origin = isRecord(historyState) && typeof historyState.paperOrigin === 'string'
-    ? historyState.paperOrigin : undefined;
-  const hash = navigate(state, location.hash, origin);
-  pruneEmptyChats(state, state.current);
-  // Shared paper links open the paper as a reply in its session instead of keeping a separate route.
-  const paper = state.paper;
-  if (paper) {
-    showContent(state.current, { kind: 'paper', paperId: paper.id });
-    state.current.scroll = Number.MAX_SAFE_INTEGER;
-    state.paper = null;
-  }
-  const target = paper?.returnHash ?? hash;
-  if (target !== location.hash) history.replaceState(null, '', target);
-  setMenu(false);
-  render();
+function executeCommand(command: Command, fromInput = false) {
+  if (fromInput) { input.value = ''; state.current.draft = ''; }
+  $('#command-error').hidden = true;
+  closeCommands();
+  if (command.topic) show({ kind: 'preset', topic: command.topic });
+  else show({ kind: 'help' });
+  updateComposer();
+  if (fromInput) input.focus({ preventScroll: true });
 }
-function newConversation() {
-  if (state.current.topic === 'chat' && !isKeptChat(state.current)) {
+function submitInput() {
+  if (pending.has(state.current.id)) { void sendMessage(); return; }
+  const parsed = parseInput(input.value);
+  if (parsed.kind === 'command') { executeCommand(parsed.command, true); return; }
+  if (parsed.kind === 'invalid') {
+    closeCommands();
+    $('#command-error').textContent = 'Unknown command or unsupported arguments. Type / to see available commands.';
+    $('#command-error').hidden = false;
     input.focus();
     return;
   }
-  const thread = makeThread(crypto.randomUUID(), 'chat');
-  thread.intro = true;
-  state.threads.set(thread.id, thread);
-  state.chatOrder.push(thread.id);
-  location.hash = `chat/${thread.id}`;
-  setTimeout(() => input.focus(), 0);
+  if (parsed.kind === 'question') { closeCommands(); void sendMessage(); }
 }
-/** Puts a paper into the composer; the conversation about it opens once the question is sent. */
+/** Every preset is printed into the same transcript, including repeated commands. */
+function show(content: Content, animate = true) {
+  const message = showContent(state.current, content, true);
+  // Command output streams in like a reply and keeps the newest text in view; the opening screen appears at once.
+  if (animate) revealNext.add(message.id);
+  renderMessages(animate);
+  scrollToMessage(message.id);
+  updateComposer();
+}
+let routed = false;
+function route() {
+  closeCommands();
+  $('#command-error').hidden = true;
+  const hash = location.hash.replace(/^#overview$/, '#bio').replace(/^#(journey|work)$/, '#experiences')
+    .replace(/^#publication$/, '#publications');
+  const [section, id] = hash.replace(/^#/, '').split('/');
+  if (section === 'paper') show({ kind: 'paper', paperId: id ?? '' }, routed);
+  else show({ kind: 'preset', topic: isTopic(section) ? section : 'bio' }, routed);
+  routed = true;
+}
+/** Puts the selected paper into the current terminal prompt as question context. */
 function askAboutPaper(paper: Publication) {
   state.current.paperId = paper.id;
   input.value = t('paperPrompt') + paper.title;
@@ -174,83 +206,161 @@ async function sendMessage(retryId?: string) {
     pending.get(thread.id)?.abort();
     return;
   }
-  thread.draft = input.value;
-  // Questions typed in a session get their own conversation; the session keeps only its content.
-  if (thread.topic !== 'chat' && !retryId && thread.draft.trim()) {
-    const chat = startConversation(state, thread, crypto.randomUUID(), getPaper(thread.paperId));
-    input.value = '';
-    history.pushState(null, '', `#chat/${chat.id}`);
-    route();
-    void sendMessage();
+  // Once the daily budget is gone, questions are held back instead of failing at the backend.
+  if (budget?.exhausted) {
+    announce(budgetText(budget));
+    $('#budget-notice').scrollIntoView({ block: 'nearest' });
+    input.focus({ preventScroll: true });
     return;
   }
+  thread.draft = input.value;
   const reply = prepareReply(thread, retryId);
   if (!reply) return;
   input.value = thread.draft;
   const controller = new AbortController();
   pending.set(thread.id, controller);
-  const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), 15000);
+  const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), 60000);
   renderMessages();
-  renderNavigation();
   updateComposer();
   scrollToLatest();
   announce(t('thinking'));
   try {
     const result = await requestReply({
-      message: reply.prompt, topic: thread.topic, paperId: reply.paperId, signal: controller.signal,
+      message: reply.prompt, topic: thread.topic, paperId: reply.paperId,
+      history: conversationHistory(thread, reply.id), signal: controller.signal,
     }, siteConfig.chatEndpoint);
     controller.signal.throwIfAborted();
     reply.text = result.text;
+    reply.mode = result.mode;
+    reply.error = undefined;
     reply.state = 'done';
     revealNext.add(reply.id);
-    if (state.current === thread) announce(t('simulated') + ': ' + result.text);
+    renderChatMode(result.mode);
+    applyBudget(result.budget);
+    if (state.current === thread) announce(t(result.mode === 'live' ? 'aiReply' : 'simulated') + ': ' + result.text);
   } catch (error) {
     reply.state = error instanceof Error && error.name === 'AbortError' ? 'stopped' : 'error';
-    if (state.current === thread) announce(t(reply.state === 'stopped' ? 'stopped' : 'failed'));
+    // Rate limits and outages carry a message written for visitors; other failures use the generic text.
+    reply.error = error instanceof ChatError && [429, 502, 503].includes(error.status) ? error.message : undefined;
+    if (error instanceof ChatError) applyBudget(error.budget ?? undefined);
+    if (state.current === thread) announce(reply.state === 'stopped' ? t('stopped') : reply.error ?? t('failed'));
   } finally {
     clearTimeout(timeout);
     pending.delete(thread.id);
     if (state.current === thread) {
-      renderMessages();
+      const following = nearBottom();
+      renderMessages(following);
       updateComposer();
-      scrollToLatest();
-      input.focus();
+      if (following) scrollToLatest();
     }
   }
 }
 
 $('#chat-form').addEventListener('submit', event => {
   event.preventDefault();
-  void sendMessage();
+  submitInput();
 });
 input.addEventListener('input', () => {
   state.current.draft = input.value;
   updateComposer();
+  $('#command-error').hidden = true;
+  candidates = matchCommands(input.value);
+  selectedCommand = 0;
+  renderCommands();
 });
 input.addEventListener('keydown', event => {
+  if (event.isComposing) return;
+  if (candidates.length && !event.shiftKey) {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      selectedCommand = (selectedCommand + (event.key === 'ArrowDown' ? 1 : -1) + candidates.length) % candidates.length;
+      renderCommands();
+      return;
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      input.value = candidates[selectedCommand].name;
+      state.current.draft = input.value;
+      closeCommands();
+      updateComposer();
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      executeCommand(candidates[selectedCommand], true);
+      return;
+    }
+  }
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
-    if (!pending.has(state.current.id)) void sendMessage();
+    if (!pending.has(state.current.id)) submitInput();
   }
 });
 $('#theme-toggle').addEventListener('click', () => {
   theme = theme === 'dark' ? 'light' : 'dark';
-  savePreference('fz-theme', theme);
+  savePreference('fz-terminal-theme', theme);
   renderTheme();
 });
-$('#new-chat').innerHTML = `${icon('plus')}<span>${t('newChat')}</span>`;
-$('#new-chat').addEventListener('click', () => newConversation());
-$('#menu-toggle').innerHTML = icon('menu');
-$('#menu-toggle').setAttribute('aria-label', t('menu'));
-$('#menu-toggle').addEventListener('click', () => setMenu(!sidebar.classList.contains('open')));
-$('#close-menu').innerHTML = icon('close');
-$('#close-menu').setAttribute('aria-label', t('closeMenu'));
-$('#close-menu').addEventListener('click', () => setMenu(false));
-$('#scrim').addEventListener('click', () => setMenu(false));
+$('#close-commands').addEventListener('click', () => { closeCommands(); input.focus(); });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && sidebar.classList.contains('open')) setMenu(false);
+  if (event.key === 'Escape') closeCommands();
+  if (event.defaultPrevented || input.readOnly || isEditing(event.target) || hasTextSelection()) return;
+  const target = event.target instanceof Element ? event.target : null;
+  const action = typingAction(event, Boolean(target?.closest('button, a, [role="button"]')));
+  if (!action) return;
+  input.focus({ preventScroll: true });
+  // IME and dead keys must complete through the browser's native composition path.
+  if (action === 'focus') return;
+  event.preventDefault();
+  insertText(event.key);
+});
+
+function isEditing(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]'));
+}
+function hasTextSelection() {
+  const selection = window.getSelection();
+  return Boolean(selection && !selection.isCollapsed);
+}
+function insertText(text: string) {
+  const available = input.maxLength - input.value.length + input.selectionEnd - input.selectionStart;
+  let value = '';
+  for (const character of text) {
+    if (value.length + character.length > available) break;
+    value += character;
+  }
+  if (!value) return;
+  input.setRangeText(value, input.selectionStart, input.selectionEnd, 'end');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+document.addEventListener('paste', event => {
+  if (event.defaultPrevented || input.readOnly || isEditing(event.target) || hasTextSelection()) return;
+  const text = event.clipboardData?.getData('text/plain');
+  if (!text) return;
+  event.preventDefault();
+  input.focus({ preventScroll: true });
+  insertText(text);
+});
+// Clicking ordinary output keeps the prompt ready, including before IME composition.
+document.addEventListener('pointerup', event => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (event.pointerType !== 'mouse' || event.button !== 0 || input.readOnly || hasTextSelection()
+    || !target?.closest('#app-shell') || target.closest('a, button, input, textarea, select, [contenteditable], [role="option"]')) return;
+  input.focus({ preventScroll: true });
 });
 document.addEventListener('click', async event => {
+  const target = event.target instanceof Element ? event.target : null;
+  const commandTarget = target?.closest<HTMLElement>('[data-command]');
+  if (commandTarget) {
+    if (commandTarget instanceof HTMLAnchorElement && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
+    const command = commands.find(command => command.name === commandTarget.dataset.command);
+    if (command) {
+      event.preventDefault();
+      executeCommand(command, Boolean(commandTarget.closest('#command-options')));
+    }
+    return;
+  }
+  if (!target?.closest('.composer-wrap')) closeCommands();
   const button = event.target instanceof Element ? event.target.closest('button') : null;
   if (!button) return;
   const { paper, ask, category, topic, retry, copy, suggest } = button.dataset;
@@ -280,18 +390,34 @@ document.addEventListener('click', async event => {
     const message = state.current.messages.find(message => message.id === copy);
     if (!message || message.role !== 'assistant') return;
     try {
-      await navigator.clipboard.writeText(message.text);
+      await navigator.clipboard.writeText(isOfftopicReply(message.text) ? t('offtopic') : stripPaperMarkers(message.text));
       announce(t('copied'));
       button.textContent = t('copied');
     } catch { announce(t('copyFailed')); }
   }
 });
 window.addEventListener('hashchange', route);
+// Keep the input above the on-screen keyboard on narrow viewports.
+function updateViewport() {
+  const viewport = window.visualViewport;
+  document.documentElement.style.setProperty('--mobile-height', `${viewport?.height ?? window.innerHeight}px`);
+}
+window.visualViewport?.addEventListener('resize', updateViewport);
+window.addEventListener('resize', updateViewport);
+updateViewport();
 try {
   state.site = await loadSiteData(async path => {
     const response = await fetch(path);
     if (!response.ok) throw new Error(`Could not load ${path}`);
-    return response.json();
+    return response.text();
   });
 } catch { state.loadFailed = true; }
+renderTheme();
+renderChatMode();
+void refreshStatus();
+input.placeholder = t('placeholder');
 route();
+if (matchMedia('(pointer: fine)').matches
+  && (document.activeElement === document.body || document.activeElement === document.documentElement)) {
+  input.focus({ preventScroll: true });
+}

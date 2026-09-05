@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { loadSiteData } from '../src/types.js';
+import { loadSiteData } from '../src/markdown.js';
 
-export const readLocal = async (path: string) => JSON.parse(await readFile(new URL(`../../${path}`, import.meta.url), 'utf8'));
+export const readLocal = (path: string) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
 export const site = await loadSiteData(readLocal);
 
 const decode = (text: string) => text.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (entity, code: string) => {
