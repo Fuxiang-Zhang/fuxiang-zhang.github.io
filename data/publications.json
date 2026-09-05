@@ -1,0 +1,288 @@
+[
+  {
+    "id": "paper-1",
+    "title": "SkyReels-V4: Multi-modal Video-Audio Generation, Inpainting and Editing Model",
+    "authors": "Guibin Chen, Dixuan Lin, Jiangping Yang, Youqiang Zhang, Zhengcong Fei, Debang Li, Sheng Chen, Chaofeng Ao, Nuo Pang, Yiming Wang, Yikun Dou, Zheng Chen, Mingyuan Fan, Tuanhui Li, Mingshan Chang, Hao Zhang, Xiaopeng Sun, Jingtao Xu, Yuqiang Xie, Jiahua Wang, Zhiheng Xu, Weiming Xiong, Yuzhe Jin, Baoxuan Gu, Binjie Mao, Yunjie Yu, Jujie He, Yuhao Feng, Shiwen Tu, Chaojie Wang, Rui Yan, Wei Shen, Jingchen Wu, Peng Zhao, Xuanyue Zhong, Zhuangzhuang Liu, Kaifei Wang, Fuxiang Zhang, Weikai Xu, Wenyan Liu, Binglu Zhang, Yu Shen, Tianhui Xiong, Bin Peng, Liang Zeng, Xuchen Song, Haoxiang Guo, Peiyu Wang, Max W. Y. Lam, Chien-Hung Liu, Yahui Zhou",
+    "venue": "Technical Report",
+    "venueShort": "Technical Report",
+    "year": 2026,
+    "category": "reports",
+    "topic": "llm",
+    "links": {
+      "paper": "https://arxiv.org/abs/2602.21818"
+    }
+  },
+  {
+    "id": "paper-2",
+    "title": "Dr. MAS: Stable Reinforcement Learning for Multi-Agent LLM Systems",
+    "authors": "Lang Feng, Longtao Zheng, Shuo He, Fuxiang Zhang, Bo An",
+    "venue": "ICLR Workshop on Multi-Agent Learning and Its Opportunities in the Era of Generative AI (MALGAI)",
+    "venueShort": "MALGAI",
+    "year": 2026,
+    "category": "reports",
+    "topic": "marl",
+    "links": {
+      "paper": "https://arxiv.org/abs/2602.08847"
+    }
+  },
+  {
+    "id": "paper-3",
+    "title": "DeRL-SWE: Decoupled Reinforcement Learning with Nested Credit Assignment for Software Engineering",
+    "authors": "Fuxiang Zhang, Xinyu Guan, Jujie He, Liang Zeng, Jiacheng Xu, Yang Liu, Bo An",
+    "venue": "ICML Workshop on Deep Learning for Code (DL4C)",
+    "venueShort": "DL4C",
+    "year": 2026,
+    "category": "reports",
+    "topic": "llm",
+    "links": {
+      "paper": "https://openreview.net/forum?id=MisdGC6Jlh"
+    }
+  },
+  {
+    "id": "paper-4",
+    "title": "Skywork Open Reasoner 1 Technical Report",
+    "authors": "Jujie He, Jiacai Liu, Chris Yuhao Liu, Rui Yan, Chaojie Wang, Peng Cheng, Xiaoyu Zhang, Fuxiang Zhang, Jiacheng Xu, Wei Shen, Siyuan Li, Liang Zeng, Tianwen Wei, Cheng Cheng, Bo An, Yang Liu, Yahui Zhou",
+    "venue": "Technical Report",
+    "venueShort": "Technical Report",
+    "year": 2025,
+    "category": "reports",
+    "topic": "llm",
+    "links": {
+      "paper": "https://arxiv.org/abs/2505.22312"
+    }
+  },
+  {
+    "id": "paper-5",
+    "title": "Skywork-Reward-V2: Scaling Preference Data Curation via Human-AI Synergy",
+    "authors": "Chris Yuhao Liu, Liang Zeng, Yuzhen Xiao, Jujie He, Jiacai Liu, Chaojie Wang, Rui Yan, Wei Shen, Fuxiang Zhang, Jiacheng Xu, Yang Liu, Yahui Zhou",
+    "venue": "Technical Report",
+    "venueShort": "Technical Report",
+    "year": 2025,
+    "category": "reports",
+    "topic": "llm",
+    "links": {
+      "paper": "https://arxiv.org/abs/2507.01352",
+      "code": "https://github.com/SkyworkAI/Skywork-Reward-V2"
+    }
+  },
+  {
+    "id": "paper-6",
+    "title": "REAR: Test-time Preference Realignment through Reward Decomposition",
+    "authors": "Fuxiang Zhang, Pengcheng Wang, Chenran Li, Yi-Chen Li, Yuxin Chen, Lang Feng, Chenfeng Xu, Masayoshi Tomizuka, Bo An",
+    "venue": "International Conference on Machine Learning (ICML)",
+    "venueShort": "ICML",
+    "year": 2026,
+    "category": "conference",
+    "topic": "llm",
+    "links": {
+      "paper": "https://arxiv.org/abs/2606.30339",
+      "code": "https://github.com/mansicer/REAR"
+    }
+  },
+  {
+    "id": "paper-7",
+    "title": "Incentivizing LLMs to Self-Verify Their Answers",
+    "authors": "Fuxiang Zhang, Jiacheng Xu, Chaojie Wang, Ce Cui, Yang Liu, Bo An",
+    "venue": "Conference on Neural Information Processing Systems (NeurIPS)",
+    "venueShort": "NeurIPS",
+    "year": 2025,
+    "category": "conference",
+    "topic": "llm",
+    "links": {
+      "paper": "https://arxiv.org/abs/2506.01369",
+      "code": "https://github.com/mansicer/self-verification"
+    }
+  },
+  {
+    "id": "paper-8",
+    "title": "Multi-Agent Imitation by Learning and Sampling from Factorized Soft Q-Function",
+    "authors": "Yi-Chen Li, Zhongxiang Ling, Tao Jiang, Fuxiang Zhang, Pengyuan Wang, Lei Yuan, Zongzhang Zhang, Yang Yu",
+    "venue": "Conference on Neural Information Processing Systems (NeurIPS)",
+    "venueShort": "NeurIPS",
+    "year": 2025,
+    "category": "conference",
+    "topic": "marl",
+    "links": {
+      "paper": "https://papers.neurips.cc/paper_files/paper/2025/hash/13a6f537e943a598b8719b03181a8e2a-Abstract-Conference.html",
+      "code": "https://github.com/LAMDA-RL/MAFIS"
+    }
+  },
+  {
+    "id": "paper-9",
+    "title": "Q-Adapter: Customizing Pre-trained LLMs to New Preferences with Forgetting Mitigation",
+    "authors": "Yi-Chen Li*, Fuxiang Zhang*, Wenjie Qiu, Lei Yuan, Chengxing Jia, Zongzhang Zhang, Yang Yu, Bo An",
+    "venue": "International Conference on Learning Representations (ICLR)",
+    "venueShort": "ICLR",
+    "year": 2025,
+    "category": "conference",
+    "topic": "llm",
+    "links": {
+      "paper": "https://arxiv.org/abs/2407.03856",
+      "code": "https://github.com/mansicer/Q-Adapter"
+    }
+  },
+  {
+    "id": "paper-10",
+    "title": "Disentangling Policy from Offline Task Representation Learning via Adversarial Data Augmentation",
+    "authors": "Chengxing Jia*, Fuxiang Zhang*, Yi-Chen Li, Chenxiao Gao, Xu-Hui Liu, Lei Yuan, Zongzhang Zhang, and Yang Yu",
+    "venue": "International Conference on Autonomous Agents and Multiagent Systems (AAMAS)",
+    "venueShort": "AAMAS",
+    "year": 2024,
+    "category": "conference",
+    "topic": "rl",
+    "links": {
+      "paper": "https://arxiv.org/abs/2403.07261",
+      "code": "https://github.com/LAMDA-RL/ReDA"
+    }
+  },
+  {
+    "id": "paper-11",
+    "title": "Policy Rehearsing: Training Generalizable Policies for Reinforcement Learning",
+    "authors": "Chengxing Jia, Chenxiao Gao, Hao Yin, Fuxiang Zhang, Xiyao Chen, Tian Xu, Lei Yuan, Zongzhang Zhang, Zhi-Hua Zhou",
+    "venue": "International Conference on Learning Representations (ICLR)",
+    "venueShort": "ICLR",
+    "year": 2024,
+    "category": "conference",
+    "topic": "rl",
+    "links": {
+      "paper": "https://openreview.net/pdf?id=m3xVPaZp6Z"
+    }
+  },
+  {
+    "id": "paper-12",
+    "title": "Internal Logical Induction for Pixel-Symbolic Reinforcement Learning",
+    "authors": "Jiacheng Xu, Chao Chen, Fuxiang Zhang, Lei Yuan, Zongzhang Zhang, Yang Yu",
+    "venue": "ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD)",
+    "venueShort": "KDD",
+    "year": 2023,
+    "category": "conference",
+    "topic": "rl",
+    "links": {
+      "paper": "https://dl.acm.org/doi/10.1145/3580305.3599393"
+    }
+  },
+  {
+    "id": "paper-13",
+    "title": "Policy Regularization with Dataset Constraint for Offline Reinforcement Learning",
+    "authors": "Yuhang Ran*, Yi-Chen Li*, Fuxiang Zhang, Zongzhang Zhang, and Yang Yu",
+    "venue": "International Conference on Machine Learning (ICML)",
+    "venueShort": "ICML",
+    "year": 2023,
+    "category": "conference",
+    "topic": "rl",
+    "links": {
+      "paper": "https://arxiv.org/abs/2306.06569",
+      "code": "https://github.com/LAMDA-RL/PRDC"
+    }
+  },
+  {
+    "id": "paper-14",
+    "title": "Discovering Generalizable Multi-agent Coordination Skills from Multi-task Offline Data",
+    "authors": "Fuxiang Zhang*, Chengxing Jia*, Yi-Chen Li, Lei Yuan, Yang Yu, Zongzhang Zhang",
+    "venue": "International Conference on Learning Representations (ICLR)",
+    "venueShort": "ICLR",
+    "year": 2023,
+    "category": "conference",
+    "topic": "marl",
+    "links": {
+      "paper": "https://openreview.net/pdf?id=53FyUAdP7d",
+      "code": "https://github.com/LAMDA-RL/ODIS"
+    }
+  },
+  {
+    "id": "paper-15",
+    "title": "Multi-Agent Concentrative Coordination with Decentralized Task Representation",
+    "authors": "Lei Yuan, Chenghe Wang, Jianhao Wang, Fuxiang Zhang, Feng Chen, Cong Guan, Zongzhang Zhang, Chongjie Zhang, Yang Yu",
+    "venue": "International Joint Conference on Artificial Intelligence (IJCAI)",
+    "venueShort": "IJCAI",
+    "year": 2022,
+    "category": "conference",
+    "topic": "marl",
+    "links": {
+      "paper": "https://www.ijcai.org/proceedings/2022/0085.pdf",
+      "code": "https://github.com/DrZero0/MACC"
+    }
+  },
+  {
+    "id": "paper-16",
+    "title": "Towards Deployment-Efficient and Collision-Free Multi-Agent Path Finding (Student Abstract)",
+    "authors": "Feng Chen, Chenghe Wang, Fuxiang Zhang, Haotian Ding, Qiyu Zhong, Shi Pu, Zongzhang Zhang",
+    "venue": "AAAI Conference on Artificial Intelligence (AAAI), Student Abstract",
+    "venueShort": "AAAI",
+    "year": 2023,
+    "category": "conference",
+    "topic": "marl",
+    "links": {
+      "paper": "https://ojs.aaai.org/index.php/AAAI/article/view/26951/26723&ved=2ahUKEwifk-qf5_aPAxUuzzgGHU3fK4QQFnoECBsQAQ&usg=AOvVaw2x8XqbOXf0TZWFq6JpS7ST"
+    }
+  },
+  {
+    "id": "paper-17",
+    "title": "Multi-Agent Incentive Communication via Decentralized Teammate Modeling",
+    "authors": "Lei Yuan*, Jianhao Wang*, Fuxiang Zhang*, Chenghe Wang, Zongzhang Zhang, Yang Yu, and Chongjie Zhang",
+    "venue": "AAAI Conference on Artificial Intelligence (AAAI)",
+    "venueShort": "AAAI",
+    "year": 2022,
+    "category": "conference",
+    "topic": "marl",
+    "links": {
+      "paper": "https://cdn.aaai.org/ojs/21179/21179-13-25192-1-2-20220628.pdf",
+      "code": "https://github.com/mansicer/MAIC"
+    }
+  },
+  {
+    "id": "paper-18",
+    "title": "Improving Sample Efficiency of Reinforcement Learning with Background Knowledge from Large Language Models",
+    "authors": "Fuxiang Zhang, Junyou Li, Yi-Chen Li, Zongzhang Zhang, Yang Yu, Deheng Ye",
+    "venue": "IEEE Transactions on Neural Networks and Learning Systems (TNNLS)",
+    "venueShort": "TNNLS",
+    "year": 2025,
+    "category": "journal",
+    "topic": "rl",
+    "links": {
+      "paper": "https://arxiv.org/abs/2407.03964",
+      "code": "https://github.com/mansicer/background-knowledge-rl"
+    }
+  },
+  {
+    "id": "paper-19",
+    "title": "Generalizable Multi-Modal Adversarial Imitation Learning for Non-Stationary Dynamics",
+    "authors": "Yi-Chen Li, Ningjing Chao, Zongzhang Zhang, Fuxiang Zhang, Lei Yuan, Yang Yu",
+    "venue": "IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)",
+    "venueShort": "TPAMI",
+    "year": 2025,
+    "category": "journal",
+    "topic": "rl",
+    "links": {
+      "paper": "https://ieeexplore.ieee.org/document/10930709",
+      "code": "https://github.com/LAMDA-RL/GMAIL"
+    }
+  },
+  {
+    "id": "paper-20",
+    "title": "Multiagent Continual Coordination via Progressive Task Contextualization",
+    "authors": "Lei Yuan, Lihe Li, Ziqian Zhang, Fuxiang Zhang, Cong Guan, Yang Yu",
+    "venue": "IEEE Transactions on Neural Networks and Learning Systems (TNNLS)",
+    "venueShort": "TNNLS",
+    "year": 2025,
+    "category": "journal",
+    "topic": "marl",
+    "links": {
+      "paper": "https://arxiv.org/abs/2305.13937",
+      "code": "https://github.com/lilh76/MACPro"
+    }
+  },
+  {
+    "id": "paper-21",
+    "title": "Model Gradient: Unified Model and Policy Learning in Model-based Reinforcement Learning",
+    "authors": "Chengxing Jia*, Fuxiang Zhang*, Tian Xu, Jing-Cheng Pang, Zongzhang Zhang, and Yang Yu",
+    "venue": "Frontiers of Computer Science",
+    "venueShort": "FCS",
+    "year": 2024,
+    "category": "journal",
+    "topic": "rl",
+    "links": {
+      "paper": "https://link.springer.com/article/10.1007/s11704-023-3150-5"
+    }
+  }
+]

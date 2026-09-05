@@ -1,0 +1,19 @@
+{
+  "name": "fuxiang-research-homepage",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && node .build/scripts/dev.js",
+    "start": "npm run build && node .build/server.js",
+    "check": "tsc --noEmit",
+    "build": "tsc && node .build/scripts/build.js",
+    "test": "npm run build && node --test .build/tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^7.0.2"
+  }
+}
