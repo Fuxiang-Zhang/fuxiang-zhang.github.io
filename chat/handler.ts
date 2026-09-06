@@ -8,9 +8,8 @@
 import { mockReply } from '../src/chat.js';
 import { MAX_MESSAGE, MAX_REPLY, MAX_HISTORY, MAX_HISTORY_CHARS, MAX_BODY, isRecord, type ChatReply, type ChatStreamEvent, type ChatRequest, type ChatStatus, type ChatTurn, type SiteData } from '../src/types.js';
 import { budgetStatus, checkClientLimit, readUsage, recordUsage, secondsUntilReset, type CounterStore, type Usage } from './limits.js';
-import { sectionIds } from '../src/commands.js';
-import { askModel, ModelReplyError } from './openai.js';
-import { buildInstructions } from './prompt.js';
+import { askModel, DEFAULT_MODEL, ModelReplyError } from './openai.js';
+import { buildInstructions, promptCacheKey } from './prompt.js';
 import { chatDeadline } from '../src/chat-deadline.js';
 
 export interface ChatEnv {
@@ -53,19 +52,14 @@ function json(status: number, value: unknown, headers: Record<string, string> = 
 const isTurn = (value: unknown): value is ChatTurn => isRecord(value)
   && (value.role === 'user' || value.role === 'assistant') && typeof value.text === 'string' && value.text.length <= (value.role === 'user' ? MAX_MESSAGE : MAX_REPLY);
 
-/**
- * Accepts only the documented request shape; anything else yields the reason for a 400.
- * `sessions` are the section ids data/site.md declares, so the page's own session
- * names are accepted and nothing else.
- */
-export function parseChatRequest(value: unknown, sessions: readonly string[] = []): ChatRequest | string {
+/** Accepts only the documented request shape; anything else yields the reason for a 400. */
+export function parseChatRequest(value: unknown): ChatRequest | string {
   if (!isRecord(value)) return 'Expected a JSON object.';
   if (typeof value.message !== 'string' || !value.message.trim() || value.message.length > MAX_MESSAGE) return `Message must contain 1–${MAX_MESSAGE} characters.`;
-  if (value.topic !== undefined && value.topic !== 'chat' && !sessions.includes(value.topic as string)) return 'Unknown topic.';
   if (value.paperId !== undefined && value.paperId !== null && typeof value.paperId !== 'string') return 'Invalid paper id.';
   if (value.history !== undefined && (!Array.isArray(value.history) || value.history.length > MAX_HISTORY || !value.history.every(isTurn) || value.history.reduce((total: number, turn: ChatTurn) => total + turn.text.length, 0) > MAX_HISTORY_CHARS)) return 'Invalid history.';
   const history = (value.history as ChatTurn[] | undefined)?.filter(turn => turn.text.trim());
-  return { message: value.message.trim(), topic: value.topic as ChatRequest['topic'], paperId: (value.paperId as string | null | undefined) ?? null, history };
+  return { message: value.message.trim(), paperId: (value.paperId as string | null | undefined) ?? null, history };
 }
 
 export const clientAddress = (request: Request): string =>
@@ -104,7 +98,7 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
   if (new TextEncoder().encode(body).length > MAX_BODY) return json(413, { error: 'Request too large.' }, cors);
   let input: unknown;
   try { input = JSON.parse(body); } catch { return json(400, { error: 'Invalid JSON.' }, cors); }
-  const parsed = parseChatRequest(input, sectionIds(env.site));
+  const parsed = parseChatRequest(input);
   if (typeof parsed === 'string') return json(400, { error: parsed }, cors);
 
   if (env.store) {
@@ -131,7 +125,8 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
       const task = (async () => {
         try {
           const reply = await askModel({
-            apiKey: env.openaiKey!, model: env.model, instructions: buildInstructions(env.site, paper), turns,
+            apiKey: env.openaiKey!, model: env.model, instructions: buildInstructions(env.site, paper, now), turns,
+            cacheKey: promptCacheKey(env.site, env.model ?? DEFAULT_MODEL),
             signal: deadline.signal, onDelta: text => send({ type: 'delta', text }),
           });
           const usage = await accountUsage(env, { requests: 1, ...reply.usage }, now, reply.id);

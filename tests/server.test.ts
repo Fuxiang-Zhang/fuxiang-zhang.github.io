@@ -27,7 +27,7 @@ test('served data and social preview image match the source files', async t => {
   assert.equal(photo.status, 200);
   assert.deepEqual(Buffer.from(await photo.arrayBuffer()), await readFile(new URL(`../../assets/Photo.JPG`, import.meta.url)));
 
-  const result = await requestReply({ message: 'What does Fuxiang research?', topic: 'bio' }, `${origin}/api/chat`);
+  const result = await requestReply({ message: 'What does Fuxiang research?' }, `${origin}/api/chat`);
   assert.equal(result.mode, 'mock');
   assert.match(result.text, /simulat(?:ed|ion)|mock|demo/i);
 });

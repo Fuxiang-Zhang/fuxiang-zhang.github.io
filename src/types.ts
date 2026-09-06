@@ -83,7 +83,7 @@ export const MAX_BODY = 160_000;
 
 /* Chat API contract, shared by the browser client (src/chat.ts) and the backend (chat/handler.ts). */
 export interface ChatTurn { role: 'user' | 'assistant'; text: string }
-export interface ChatRequest { message: string; topic?: SectionId; paperId?: string | null; history?: ChatTurn[] }
+export interface ChatRequest { message: string; paperId?: string | null; history?: ChatTurn[] }
 /** `mock` replies are canned placeholders; `live` replies come from the model. */
 export type ChatMode = 'mock' | 'live';
 /** Today's token budget as reported by the backend; `resetsAt` is the next UTC midnight. */

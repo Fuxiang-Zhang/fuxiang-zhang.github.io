@@ -50,12 +50,14 @@ export interface Usage {
   /** Input tokens served from the provider's prompt cache (already included in `input`). */
   cached: number;
   output: number;
+  /** Reasoning tokens (already included in `output`), which the model spends before writing the visible answer. */
+  reasoning: number;
   /** Input plus output, the number the daily budget is measured against. */
   total: number;
   /** Model calls that failed, including failures with charged tokens. */
   errors: number;
 }
-export const emptyUsage = (): Usage => ({ requests: 0, input: 0, cached: 0, output: 0, total: 0, errors: 0 });
+export const emptyUsage = (): Usage => ({ requests: 0, input: 0, cached: 0, output: 0, reasoning: 0, total: 0, errors: 0 });
 export const usageKey = (now = Date.now()): string => `usage:${new Date(now).toISOString().slice(0, 10)}`;
 
 export async function readUsage(store: CounterStore, now = Date.now()): Promise<Usage> {
