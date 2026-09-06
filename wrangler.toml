@@ -24,9 +24,17 @@ RATE_PER_HOUR = "20"
 # Total tokens (input + output) the assistant may use per UTC day across all visitors. 0 disables the budget.
 TOKEN_BUDGET_PER_DAY = "9900000"
 
-# Rate-limit counters and the daily token ledger. Create the namespace once and paste its id:
-#   npx wrangler kv namespace create CHAT_KV
-# Without this binding the worker runs with no rate limits and no token budget.
+# Atomic rate counters and daily usage. New SQLite Durable Objects are created on deploy.
+[[durable_objects.bindings]]
+name = "CHAT_COUNTERS"
+class_name = "ChatCounters"
+
+[[migrations]]
+tag = "v1-chat-counters"
+new_sqlite_classes = ["ChatCounters"]
+
+# Read-only migration source: existing records are imported once per ledger key.
+# Keep this binding during migration; new writes go to CHAT_COUNTERS.
 [[kv_namespaces]]
 binding = "CHAT_KV"
 id = "59b26f84f9524f288071d9ca0aae8de1"

@@ -6,9 +6,10 @@
  *                   homepage can warn visitors before they ask.
  */
 import { mockReply } from '../src/chat.js';
-import { isRecord, isTopic, type ChatReply, type ChatRequest, type ChatStatus, type ChatTurn, type SiteData } from '../src/types.js';
-import { budgetStatus, checkClientLimit, emptyUsage, readUsage, recordUsage, secondsUntilReset, type KVStore } from './limits.js';
-import { askModel } from './openai.js';
+import { MAX_MESSAGE, MAX_REPLY, MAX_HISTORY, MAX_HISTORY_CHARS, MAX_BODY, isRecord, type ChatReply, type ChatRequest, type ChatStatus, type ChatTurn, type SiteData } from '../src/types.js';
+import { budgetStatus, checkClientLimit, emptyUsage, readUsage, recordUsage, secondsUntilReset, type CounterStore } from './limits.js';
+import { sectionIds } from '../src/commands.js';
+import { askModel, ModelReplyError, type ModelReply } from './openai.js';
 import { buildInstructions } from './prompt.js';
 
 export interface ChatEnv {
@@ -19,16 +20,14 @@ export interface ChatEnv {
   /** Exact origins allowed to call the endpoint from a browser. */
   allowedOrigins: string[];
   /** Counter store for limits and the usage ledger; omit to disable both (local development). */
-  store?: KVStore;
+  store?: CounterStore;
   /** Questions per client per hour. */
   perHour?: number;
   /** Total tokens (input + output) per UTC day across all visitors; 0 disables the budget. */
   tokenBudget?: number;
 }
 
-export const MAX_MESSAGE = 2000;
-export const MAX_HISTORY = 12;
-export const MAX_BODY = 32_000;
+export { MAX_MESSAGE, MAX_HISTORY, MAX_BODY } from '../src/types.js';
 export const DEFAULT_PER_HOUR = 20;
 export const DEFAULT_TOKEN_BUDGET = 9_500_000;
 
@@ -49,15 +48,19 @@ function json(status: number, value: unknown, headers: Record<string, string> = 
 }
 
 const isTurn = (value: unknown): value is ChatTurn => isRecord(value)
-  && (value.role === 'user' || value.role === 'assistant') && typeof value.text === 'string' && value.text.length <= MAX_MESSAGE;
+  && (value.role === 'user' || value.role === 'assistant') && typeof value.text === 'string' && value.text.length <= (value.role === 'user' ? MAX_MESSAGE : MAX_REPLY);
 
-/** Accepts only the documented request shape; anything else yields the reason for a 400. */
-export function parseChatRequest(value: unknown): ChatRequest | string {
+/**
+ * Accepts only the documented request shape; anything else yields the reason for a 400.
+ * `sessions` are the section ids data/site.md declares, so the page's own session
+ * names are accepted and nothing else.
+ */
+export function parseChatRequest(value: unknown, sessions: readonly string[] = []): ChatRequest | string {
   if (!isRecord(value)) return 'Expected a JSON object.';
   if (typeof value.message !== 'string' || !value.message.trim() || value.message.length > MAX_MESSAGE) return `Message must contain 1–${MAX_MESSAGE} characters.`;
-  if (value.topic !== undefined && value.topic !== 'chat' && !isTopic(value.topic)) return 'Unknown topic.';
+  if (value.topic !== undefined && value.topic !== 'chat' && !sessions.includes(value.topic as string)) return 'Unknown topic.';
   if (value.paperId !== undefined && value.paperId !== null && typeof value.paperId !== 'string') return 'Invalid paper id.';
-  if (value.history !== undefined && (!Array.isArray(value.history) || value.history.length > MAX_HISTORY || !value.history.every(isTurn))) return 'Invalid history.';
+  if (value.history !== undefined && (!Array.isArray(value.history) || value.history.length > MAX_HISTORY || !value.history.every(isTurn) || value.history.reduce((total: number, turn: ChatTurn) => total + turn.text.length, 0) > MAX_HISTORY_CHARS)) return 'Invalid history.';
   const history = (value.history as ChatTurn[] | undefined)?.filter(turn => turn.text.trim());
   return { message: value.message.trim(), topic: value.topic as ChatRequest['topic'], paperId: (value.paperId as string | null | undefined) ?? null, history };
 }
@@ -75,6 +78,14 @@ async function currentBudget(env: ChatEnv, now: number) {
 }
 
 export async function handleChat(request: Request, env: ChatEnv): Promise<Response> {
+  try { return await respond(request, env); }
+  catch (error) {
+    console.error('chat: service failed:', error instanceof Error ? error.message : error);
+    return json(503, { error: 'The assistant is unavailable right now. Please try again in a moment.' }, corsHeaders(request.headers.get('Origin'), env) ?? {});
+  }
+}
+
+async function respond(request: Request, env: ChatEnv): Promise<Response> {
   const cors = corsHeaders(request.headers.get('Origin'), env);
   if (!cors) return json(403, { error: 'Origin not allowed.' });
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
@@ -87,10 +98,10 @@ export async function handleChat(request: Request, env: ChatEnv): Promise<Respon
   if (!request.headers.get('Content-Type')?.startsWith('application/json')) return json(415, { error: 'Expected JSON.' }, cors);
 
   const body = await request.text();
-  if (body.length > MAX_BODY) return json(413, { error: 'Request too large.' }, cors);
+  if (new TextEncoder().encode(body).length > MAX_BODY) return json(413, { error: 'Request too large.' }, cors);
   let input: unknown;
   try { input = JSON.parse(body); } catch { return json(400, { error: 'Invalid JSON.' }, cors); }
-  const parsed = parseChatRequest(input);
+  const parsed = parseChatRequest(input, sectionIds(env.site));
   if (typeof parsed === 'string') return json(400, { error: parsed }, cors);
 
   if (env.store) {
@@ -105,17 +116,18 @@ export async function handleChat(request: Request, env: ChatEnv): Promise<Respon
 
   const paper = parsed.paperId && env.site.publications.some(paper => paper.id === parsed.paperId) ? parsed.paperId : null;
   const turns: ChatTurn[] = [...(parsed.history ?? []), { role: 'user', text: parsed.message }];
+  let reply: ModelReply;
   try {
-    const reply = await askModel({ apiKey: env.openaiKey, model: env.model, instructions: buildInstructions(env.site, paper), turns, signal: request.signal });
-    const usage = env.store ? await recordUsage(env.store, { requests: 1, ...reply.usage }, now) : emptyUsage();
-    const response: ChatReply = {
-      id: reply.id, text: reply.answer, mode: 'live',
-      ...(budget ? { budget: budgetStatus(usage, budget.limit, now) } : {}),
-    };
-    return json(200, response, cors);
+    reply = await askModel({ apiKey: env.openaiKey, model: env.model, instructions: buildInstructions(env.site, paper), turns, signal: request.signal });
   } catch (error) {
     console.error('chat: model request failed:', error instanceof Error ? error.message : error);
-    if (env.store) await recordUsage(env.store, { errors: 1 }, now);
+    if (env.store) await recordUsage(env.store, { errors: 1, ...(error instanceof ModelReplyError ? error.usage : {}) }, now);
     return json(502, { error: 'The assistant is unavailable right now. Please try again in a moment.' }, cors);
   }
+  const usage = env.store ? await recordUsage(env.store, { requests: 1, ...reply.usage }, now) : emptyUsage();
+  const response: ChatReply = {
+    id: reply.id, text: reply.answer, mode: 'live',
+    ...(budget ? { budget: budgetStatus(usage, budget.limit, now) } : {}),
+  };
+  return json(200, response, cors);
 }

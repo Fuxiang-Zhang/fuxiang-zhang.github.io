@@ -1,8 +1,9 @@
+import { MAX_REPLY } from './types.js';
 import { isRecord, type BudgetStatus, type ChatRequest, type ChatReply, type ChatStatus } from './types.js';
 
 /*
  * Publications the assistant names in a reply. The model writes the marker
- * [[paper:<id>]] using a publication's {#id} from data/site.md, and the
+ * [[paper:<id>]] using a publication's Id from data/site.md, and the
  * homepage replaces it with that paper's card, rendered from site data. The
  * title, venue, authors and links therefore always come from the file rather
  * than from the model. The prefix keeps the marker from colliding with
@@ -101,12 +102,13 @@ export class ChatError extends Error {
 
 export function parseBudget(value: unknown): BudgetStatus | null {
   if (!isRecord(value) || typeof value.used !== 'number' || typeof value.limit !== 'number'
+    || !Number.isFinite(value.used) || value.used < 0 || !Number.isFinite(value.limit) || value.limit < 0
     || typeof value.exhausted !== 'boolean' || typeof value.resetsAt !== 'string' || Number.isNaN(Date.parse(value.resetsAt))) return null;
   return { used: value.used, limit: value.limit, exhausted: value.exhausted, resetsAt: value.resetsAt };
 }
 
 export function parseChatReply(data: unknown): ChatReply {
-  if (!isRecord(data) || typeof data.text !== 'string' || !data.text.trim() || data.text.length > 20000
+  if (!isRecord(data) || typeof data.text !== 'string' || !data.text.trim() || data.text.length > MAX_REPLY
     || typeof data.id !== 'string' || (data.mode !== 'mock' && data.mode !== 'live')) {
     throw new Error('Invalid chat response.');
   }
@@ -140,7 +142,7 @@ export async function requestReply(
 /** Asks the backend what to expect before the first question: reply mode and today's budget. */
 export async function requestStatus(endpoint: string | null, signal?: AbortSignal): Promise<ChatStatus> {
   if (!endpoint) return { mode: 'mock', budget: null };
-  const response = await fetch(endpoint, { signal });
+  const response = await fetch(endpoint, { signal: signal ?? AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error(`Chat status failed (${response.status}).`);
   const data: unknown = await response.json();
   if (!isRecord(data) || (data.mode !== 'mock' && data.mode !== 'live')) throw new Error('Invalid chat status.');

@@ -2,10 +2,10 @@ import http from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { handleChat, type ChatEnv } from './chat/handler.js';
-import { MemoryStore } from './chat/limits.js';
+import { handleChat, DEFAULT_TOKEN_BUDGET, type ChatEnv } from './chat/handler.js';
+import { MemoryStore, numericSetting } from './chat/limits.js';
 import { loadSiteData } from './src/markdown.js';
-import type { SiteData } from './src/types.js';
+import { MAX_BODY, type SiteData } from './src/types.js';
 
 const root = fileURLToPath(new URL('../dist/', import.meta.url));
 const mimeTypes: Record<string, string> = {
@@ -31,43 +31,48 @@ function json(res: http.ServerResponse, status: number, value: unknown) {
  * exported site data. With OPENAI_API_KEY set (e.g. in .env) replies are live;
  * otherwise they are the labelled mock. Rate limits are kept generous locally.
  */
-const store = new MemoryStore();
-let site: Promise<SiteData> | undefined;
-async function chatEnv(publicRoot: string, host = 'localhost'): Promise<ChatEnv> {
-  site ??= loadSiteData(path => readFile(join(publicRoot, path), 'utf8'));
-  return {
-    site: await site,
-    openaiKey: process.env.OPENAI_API_KEY || undefined,
-    model: process.env.OPENAI_MODEL || undefined,
-    allowedOrigins: [`http://${host}`],
-    store,
-    perHour: 200,
-    tokenBudget: Number(process.env.TOKEN_BUDGET_PER_DAY) || undefined,
-  };
-}
-
 export function createServer(publicRoot = root) {
+  const store = new MemoryStore();
+  let site: Promise<SiteData> | undefined;
+  async function chatEnv(host = 'localhost'): Promise<ChatEnv> {
+    site ??= loadSiteData(path => readFile(join(publicRoot, path), 'utf8'));
+    return {
+      site: await site,
+      openaiKey: process.env.OPENAI_API_KEY || undefined,
+      model: process.env.OPENAI_MODEL || undefined,
+      allowedOrigins: [`http://${host}`],
+      store,
+      perHour: 200,
+      tokenBudget: numericSetting(process.env.TOKEN_BUDGET_PER_DAY, DEFAULT_TOKEN_BUDGET),
+    };
+  }
+
   return http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     let pathname: string;
     try { pathname = decodeURIComponent(new URL(req.url || '/', 'http://localhost').pathname); }
     catch { return json(res, 400, { error: 'Invalid URL.' }); }
     if (pathname === '/api/chat') {
-      let body = '';
-      for await (const chunk of req) {
-        body += chunk;
-        if (Buffer.byteLength(body) > 64_000) return json(res, 413, { error: 'Request too large.' });
-      }
-      const headers = new Headers();
-      for (const [name, value] of Object.entries(req.headers)) {
-        if (typeof value === 'string') headers.set(name, value);
-      }
-      const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/api/chat'}`, {
-        method: req.method, headers, body: ['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? '') ? undefined : body,
-      });
-      const response = await handleChat(request, await chatEnv(publicRoot, req.headers.host));
-      res.writeHead(response.status, Object.fromEntries(response.headers));
-      return res.end(Buffer.from(await response.arrayBuffer()));
+      try {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of req) {
+          size += chunk.length;
+          if (size > MAX_BODY) return json(res, 413, { error: 'Request too large.' });
+          chunks.push(chunk);
+        }
+        const body = Buffer.concat(chunks).toString('utf8');
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(req.headers)) {
+          if (typeof value === 'string') headers.set(name, value);
+        }
+        const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/api/chat'}`, {
+          method: req.method, headers, body: ['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? '') ? undefined : body,
+        });
+        const response = await handleChat(request, await chatEnv(req.headers.host));
+        res.writeHead(response.status, Object.fromEntries(response.headers));
+        return res.end(Buffer.from(await response.arrayBuffer()));
+      } catch { return json(res, 503, { error: 'The assistant is unavailable right now.' }); }
     }
     if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: 'Method not allowed.' });
     try {

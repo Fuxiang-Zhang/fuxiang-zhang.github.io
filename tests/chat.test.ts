@@ -49,6 +49,9 @@ test('malformed requests are rejected before any model call', async () => {
     const response = await handleChat(req, env({ openaiKey: 'would-not-be-used' }));
     assert.equal(response.status, status, `${req.method} ${status}`);
   }
+  // A session the file does not declare is refused, the same as any other unknown field value.
+  assert.deepEqual(parseChatRequest({ message: 'hi', topic: 'work' }, ['work']), { message: 'hi', topic: 'work', paperId: null, history: undefined });
+  assert.equal(typeof parseChatRequest({ message: 'hi', topic: 'work' }, []), 'string');
   assert.deepEqual(parseChatRequest({ message: ' hi ', paperId: undefined, history: [{ role: 'user', text: ' ' }, { role: 'assistant', text: 'ok' }] }),
     { message: 'hi', topic: undefined, paperId: null, history: [{ role: 'assistant', text: 'ok' }] });
 });
@@ -71,7 +74,7 @@ test('each client gets a fixed number of questions per hour, then 429 with Retry
   assert.match(((await blocked.json()) as { error: string }).error, /try again/i);
 });
 
-test('the daily ledger sums tokens per UTC day and survives corrupt records', async () => {
+test('the daily ledger sums tokens per UTC day and rejects corrupt records', async () => {
   let now = Date.UTC(2026, 8, 5, 23, 59);
   const store = new MemoryStore(() => now);
   await recordUsage(store, { requests: 1, input: 5000, cached: 4000, output: 300, total: 5300 }, now);
@@ -85,7 +88,7 @@ test('the daily ledger sums tokens per UTC day and survives corrupt records', as
   assert.equal((await readUsage(store, now)).total, 0, 'a new UTC day starts from zero');
   assert.equal((await readUsage(store, now - 2 * 60 * 1000)).total, 10600, 'the previous day stays readable');
   await store.put(usageKey(now), '{broken');
-  assert.deepEqual(await readUsage(store, now), { requests: 0, input: 0, cached: 0, output: 0, total: 0, errors: 0 });
+  await assert.rejects(readUsage(store, now));
 });
 
 test('an exhausted token budget is reported by GET and stops questions before the model is called', async () => {
@@ -138,4 +141,68 @@ test('model output is trimmed and an empty reply never reaches visitors', () => 
   const budget = { used: 10, limit: 100, exhausted: false, resetsAt: '2026-09-06T00:00:00.000Z' };
   assert.deepEqual(parseChatReply({ id: 'x', text: 'ok', mode: 'live', budget }), { id: 'x', text: 'ok', mode: 'live', budget });
   assert.equal(parseBudget({ used: 1, limit: 2, exhausted: false, resetsAt: 'not a date' }), null);
+});
+
+test('simultaneous questions do not overwrite usage or hourly counters', async () => {
+  const store = new MemoryStore();
+  await Promise.all(Array.from({ length: 20 }, () => recordUsage(store, { requests: 1, total: 100 })));
+  assert.equal((await readUsage(store)).requests, 20);
+  assert.equal((await readUsage(store)).total, 2000);
+  const results = await Promise.all(Array.from({ length: 20 }, () => checkClientLimit(store, 'same-client', 5)));
+  assert.equal(results.filter(result => result.allowed).length, 5);
+});
+
+test('long assistant history is accepted, while user and aggregate limits are enforced', async () => {
+  const answer = parseChatReply({ id: 'long', text: '答'.repeat(20_000), mode: 'live' });
+  const body = { message: '继续', history: [{ role: 'user', text: '问题' }, { role: 'assistant', text: answer.text }] };
+  assert.equal((await handleChat(post(body), env())).status, 200);
+  for (const history of [
+    [{ role: 'user', text: 'x'.repeat(2001) }],
+    [{ role: 'assistant', text: 'x'.repeat(20_001) }],
+    [body.history[1], body.history[1]],
+  ]) assert.equal((await handleChat(post({ message: 'hi', history }), env())).status, 400);
+});
+
+test('provider usage is recorded once for successful, incomplete, refused and empty replies', async t => {
+  t.mock.method(console, 'error', () => {});
+  let mode = 'completed';
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return Response.json({
+      id: 'resp_test', object: 'response', status: mode === 'incomplete' ? 'incomplete' : 'completed',
+      incomplete_details: mode === 'incomplete' ? { reason: 'max_output_tokens' } : null,
+      output: [{ type: 'message', role: 'assistant', content: mode === 'refused'
+        ? [{ type: 'refusal', refusal: 'Unavailable' }]
+        : [{ type: 'output_text', text: mode === 'empty' ? '' : 'A complete answer.', annotations: [] }] }],
+      usage: { input_tokens: 100, input_tokens_details: { cached_tokens: 40 }, output_tokens: 20, total_tokens: 120 },
+    });
+  });
+  const store = new MemoryStore();
+  for (mode of ['completed', 'incomplete', 'refused', 'empty']) {
+    const response = await handleChat(post({ message: 'question' }), env({ store, openaiKey: 'fake-test-key' }));
+    assert.equal(response.status, mode === 'completed' ? 200 : 502, mode);
+  }
+  assert.equal(calls, 4);
+  assert.deepEqual(await readUsage(store), { requests: 1, errors: 3, input: 400, cached: 160, output: 80, total: 480 });
+});
+
+test('ledger outages fail closed with a CORS-enabled service error', async t => {
+  t.mock.method(console, 'error', () => {});
+  const store = new MemoryStore();
+  t.mock.method(store, 'get', async () => { throw new Error('Storage unavailable'); });
+  t.mock.method(globalThis, 'fetch', () => { assert.fail('must not call the provider while the budget is unreadable'); });
+  for (const req of [request('GET'), post({ message: 'hi' })]) {
+    const response = await handleChat(req, env({ store, openaiKey: 'fake' }));
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  }
+});
+
+test('numeric configuration preserves an explicit zero and rejects invalid settings', async () => {
+  const { numericSetting } = await import('../chat/limits.js');
+  assert.equal(numericSetting('0', 9500000), 0);
+  for (const invalid of [undefined, '', 'oops', '-1', 'Infinity', '1.5']) {
+    assert.equal(numericSetting(invalid, 9500000), 9500000);
+  }
 });

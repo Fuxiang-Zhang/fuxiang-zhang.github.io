@@ -1,12 +1,13 @@
 import { ChatError, isOfftopicReply, requestReply, requestStatus, stripPaperMarkers } from './chat.js';
+import { createBudgetMonitor } from './budget.js';
 import { siteConfig } from './config.js';
 import { copy, type CopyKey } from './content.js';
-import { commands, matchCommands, parseInput, type Command } from './commands.js';
+import { buildCommands, matchCommands, parseInput, resolveRoute, type Command } from './commands.js';
 import { typingAction } from './input.js';
 import { createRenderer, escapeHTML } from './render.js';
-import { conversationHistory, createState, makeThread, prepareReply, showContent } from './state.js';
+import { conversationHistory, createState, prepareReply, showContent } from './state.js';
 import { revealHTML, type Reveal } from './stream.js';
-import { isCategory, isContentKind, isTopic, isResearchTopic, type BudgetStatus, type ChatMode, type Content, type Publication } from './types.js';
+import { MAX_MESSAGE, type BudgetStatus, type ChatMode, type Content, type Publication } from './types.js';
 import { loadSiteData } from './markdown.js';
 
 function $<T extends HTMLElement = HTMLElement>(selector: string): T {
@@ -24,8 +25,7 @@ function savePreference(key: string, value: string) {
 }
 
 const state = createState();
-state.current = makeThread('terminal', 'chat');
-const pending = new Map<string, AbortController>();
+let pending: AbortController | undefined;
 /** Replies that stream in on their next render, and the streams currently running. */
 const revealNext = new Set<string>();
 const reveals = new Map<string, Reveal>();
@@ -36,21 +36,33 @@ let theme = readPreference('fz-terminal-theme', 'light') === 'dark' ? 'dark' : '
 /** What the backend reported: reply mode and today's token budget. */
 let chatMode: ChatMode | undefined;
 let budget: BudgetStatus | null = null;
-let budgetTimer: ReturnType<typeof setTimeout> | undefined;
 let candidates: readonly Command[] = [];
 let selectedCommand = 0;
 const t = (key: CopyKey): string => copy[key];
-const view = () => createRenderer(state);
-const getPaper = (id: string | null) => state.site.publications.find(paper => paper.id === id);
+let view = createRenderer(state);
+/** The file's own command list; empty of sections until the content loads. */
+let pageCommands = buildCommands(state.site);
+let papersById = new Map<string, Publication>();
+const getPaper = (id: string | null) => papersById.get(id ?? '');
 const announce = (message: string) => { $('#announcement').textContent = message; };
 
+/** Preserve unchanged output and active animations when a reply is appended or updated. */
+const rendered = new Map<string, string>();
 function renderMessages(followLatest = true) {
-  for (const reveal of reveals.values()) reveal.cancel();
-  reveals.clear();
-  $('#messages').innerHTML = view().messages(state.current);
-  for (const id of revealNext) {
-    const body = document.querySelector<HTMLElement>(`#message-${CSS.escape(id)} .message-body`);
-    if (body) startReveal(id, body, followLatest);
+  const container = $('#messages');
+  for (const message of state.current.messages) {
+    // Content and completed user messages never change; assistant state can change on retry.
+    const signature = message.role === 'assistant' ? JSON.stringify(message) : message.id;
+    if (rendered.get(message.id) === signature) continue;
+    const previous = document.getElementById(`message-${message.id}`);
+    reveals.get(message.id)?.cancel();
+    if (previous) previous.outerHTML = view.message(message);
+    else container.insertAdjacentHTML('beforeend', view.message(message));
+    rendered.set(message.id, signature);
+    if (revealNext.has(message.id)) {
+      const body = document.getElementById(`message-${message.id}`)?.querySelector<HTMLElement>('.message-body');
+      if (body) startReveal(message.id, body, followLatest);
+    }
   }
   revealNext.clear();
 }
@@ -81,27 +93,22 @@ function renderChatMode(mode = chatMode) {
 const budgetText = (status: BudgetStatus) => t('budgetNotice').replace('{time}',
   new Date(status.resetsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }));
 /** Shows the exhausted-budget notice above the prompt and rechecks once the budget resets. */
-function applyBudget(status: BudgetStatus | null | undefined) {
-  if (status === undefined) return;
+function renderBudget(status: BudgetStatus | null) {
   budget = status;
   const notice = $('#budget-notice');
   notice.hidden = !status?.exhausted;
   notice.textContent = status?.exhausted ? budgetText(status) : '';
   renderChatMode();
-  clearTimeout(budgetTimer);
-  if (status?.exhausted) {
-    const wait = Math.min(Math.max(Date.parse(status.resetsAt) - Date.now(), 60_000) + 1000, 2_147_000_000);
-    budgetTimer = setTimeout(() => void refreshStatus(), wait);
-  }
 }
-async function refreshStatus() {
-  if (!siteConfig.chatEndpoint) return;
-  try {
-    const status = await requestStatus(siteConfig.chatEndpoint);
-    renderChatMode(status.mode);
-    applyBudget(status.budget);
-  } catch { /* The status is a convenience; sending a question still reports the real outcome. */ }
+function applyBudget(status: BudgetStatus | null | undefined) {
+  if (status === undefined) return;
+  budgetMonitor.update(status);
+  renderBudget(status);
 }
+const budgetMonitor = createBudgetMonitor(
+  () => requestStatus(siteConfig.chatEndpoint),
+  status => { chatMode = status.mode; renderBudget(status.budget); },
+);
 function renderTheme() {
   document.documentElement.dataset.theme = theme;
   $('#theme-toggle').textContent = theme === 'dark' ? '[light]' : '[dark]';
@@ -109,7 +116,7 @@ function renderTheme() {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#17191b' : '#fafafa');
 }
 function updateComposer() {
-  const busy = pending.has(state.current.id);
+  const busy = Boolean(pending);
   const send = $<HTMLButtonElement>('#send-button');
   send.disabled = !busy && !input.value.trim();
   send.textContent = busy ? '[stop]' : '[enter]';
@@ -120,7 +127,7 @@ function updateComposer() {
   input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
   const paper = getPaper(state.current.paperId);
   $('#context-chip').hidden = !paper;
-  $('#context-chip').innerHTML = view().paperContext(paper);
+  $('#context-chip').innerHTML = view.paperContext(paper);
   const last = state.current.messages.at(-1);
   const status = busy ? 'preparing reply' : last?.role === 'assistant' && last.state === 'error' ? 'reply failed'
     : last?.role === 'assistant' && last.state === 'stopped' ? 'reply stopped' : 'ready';
@@ -159,8 +166,8 @@ function executeCommand(command: Command, fromInput = false) {
   if (fromInput) input.focus({ preventScroll: true });
 }
 function submitInput() {
-  if (pending.has(state.current.id)) { void sendMessage(); return; }
-  const parsed = parseInput(input.value);
+  if (Boolean(pending)) { void sendMessage(); return; }
+  const parsed = parseInput(input.value, pageCommands);
   if (parsed.kind === 'command') { executeCommand(parsed.command, true); return; }
   if (parsed.kind === 'invalid') {
     closeCommands();
@@ -173,7 +180,7 @@ function submitInput() {
 }
 /** Every preset is printed into the same transcript, including repeated commands. */
 function show(content: Content, animate = true) {
-  const message = showContent(state.current, content, true);
+  const message = showContent(state.current, content);
   // Command output streams in like a reply and keeps the newest text in view; the opening screen appears at once.
   if (animate) revealNext.add(message.id);
   renderMessages(animate);
@@ -184,11 +191,9 @@ let routed = false;
 function route() {
   closeCommands();
   $('#command-error').hidden = true;
-  const hash = location.hash.replace(/^#overview$/, '#bio').replace(/^#(journey|work)$/, '#experiences')
-    .replace(/^#publication$/, '#publications');
-  const [section, id] = hash.replace(/^#/, '').split('/');
-  if (section === 'paper') show({ kind: 'paper', paperId: id ?? '' }, routed);
-  else show({ kind: 'preset', topic: isTopic(section) ? section : 'bio' }, routed);
+  const content = resolveRoute(location.hash, state.site);
+  if (content) show(content, routed);
+  else if (!routed) show(resolveRoute('', state.site)!, false);
   routed = true;
 }
 /** Puts the selected paper into the current terminal prompt as question context. */
@@ -202,8 +207,8 @@ function askAboutPaper(paper: Publication) {
 }
 async function sendMessage(retryId?: string) {
   const thread = state.current;
-  if (pending.has(thread.id)) {
-    pending.get(thread.id)?.abort();
+  if (pending) {
+    pending.abort();
     return;
   }
   // Once the daily budget is gone, questions are held back instead of failing at the backend.
@@ -218,7 +223,7 @@ async function sendMessage(retryId?: string) {
   if (!reply) return;
   input.value = thread.draft;
   const controller = new AbortController();
-  pending.set(thread.id, controller);
+  pending = controller;
   const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), 60000);
   renderMessages();
   updateComposer();
@@ -226,7 +231,7 @@ async function sendMessage(retryId?: string) {
   announce(t('thinking'));
   try {
     const result = await requestReply({
-      message: reply.prompt, topic: thread.topic, paperId: reply.paperId,
+      message: reply.prompt, paperId: reply.paperId,
       history: conversationHistory(thread, reply.id), signal: controller.signal,
     }, siteConfig.chatEndpoint);
     controller.signal.throwIfAborted();
@@ -237,22 +242,20 @@ async function sendMessage(retryId?: string) {
     revealNext.add(reply.id);
     renderChatMode(result.mode);
     applyBudget(result.budget);
-    if (state.current === thread) announce(t(result.mode === 'live' ? 'aiReply' : 'simulated') + ': ' + result.text);
+    announce(t(result.mode === 'live' ? 'aiReply' : 'simulated') + ': ' + result.text);
   } catch (error) {
     reply.state = error instanceof Error && error.name === 'AbortError' ? 'stopped' : 'error';
     // Rate limits and outages carry a message written for visitors; other failures use the generic text.
     reply.error = error instanceof ChatError && [429, 502, 503].includes(error.status) ? error.message : undefined;
     if (error instanceof ChatError) applyBudget(error.budget ?? undefined);
-    if (state.current === thread) announce(reply.state === 'stopped' ? t('stopped') : reply.error ?? t('failed'));
+    announce(reply.state === 'stopped' ? t('stopped') : reply.error ?? t('failed'));
   } finally {
     clearTimeout(timeout);
-    pending.delete(thread.id);
-    if (state.current === thread) {
-      const following = nearBottom();
-      renderMessages(following);
-      updateComposer();
-      if (following) scrollToLatest();
-    }
+    pending = undefined;
+    const following = nearBottom();
+    renderMessages(following);
+    updateComposer();
+    if (following) scrollToLatest();
   }
 }
 
@@ -264,7 +267,7 @@ input.addEventListener('input', () => {
   state.current.draft = input.value;
   updateComposer();
   $('#command-error').hidden = true;
-  candidates = matchCommands(input.value);
+  candidates = matchCommands(input.value, pageCommands);
   selectedCommand = 0;
   renderCommands();
 });
@@ -293,7 +296,7 @@ input.addEventListener('keydown', event => {
   }
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
-    if (!pending.has(state.current.id)) submitInput();
+    if (!Boolean(pending)) submitInput();
   }
 });
 $('#theme-toggle').addEventListener('click', () => {
@@ -353,7 +356,7 @@ document.addEventListener('click', async event => {
   const commandTarget = target?.closest<HTMLElement>('[data-command]');
   if (commandTarget) {
     if (commandTarget instanceof HTMLAnchorElement && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
-    const command = commands.find(command => command.name === commandTarget.dataset.command);
+    const command = pageCommands.find(command => command.name === commandTarget.dataset.command);
     if (command) {
       event.preventDefault();
       executeCommand(command, Boolean(commandTarget.closest('#command-options')));
@@ -363,27 +366,17 @@ document.addEventListener('click', async event => {
   if (!target?.closest('.composer-wrap')) closeCommands();
   const button = event.target instanceof Element ? event.target.closest('button') : null;
   if (!button) return;
-  const { paper, ask, category, topic, retry, copy, suggest } = button.dataset;
-  const kind = button.dataset.show;
+  const { paper, ask, retry, copy } = button.dataset;
   if (paper && getPaper(paper)) show({ kind: 'paper', paperId: paper });
   if (ask) {
     const publication = getPaper(ask);
     if (publication) askAboutPaper(publication);
-  }
-  if (kind === 'research') show({ kind });
-  if (isContentKind(kind) && kind === 'publications') {
-    show({ kind, ...(isCategory(category) ? { category } : {}), ...(isResearchTopic(topic) ? { topic } : {}) });
   }
   if ('reload' in button.dataset) location.reload();
   if (button.id === 'remove-context') {
     state.current.paperId = null;
     updateComposer();
     input.focus();
-  }
-  if (suggest) {
-    input.value = suggest;
-    state.current.draft = suggest;
-    void sendMessage();
   }
   if (retry) void sendMessage(retry);
   if (copy) {
@@ -412,9 +405,13 @@ try {
     return response.text();
   });
 } catch { state.loadFailed = true; }
+view = createRenderer(state);
+pageCommands = buildCommands(state.site);
+papersById = new Map(state.site.publications.map(paper => [paper.id, paper]));
+input.maxLength = MAX_MESSAGE;
 renderTheme();
 renderChatMode();
-void refreshStatus();
+void budgetMonitor.refresh();
 input.placeholder = t('placeholder');
 route();
 if (matchMedia('(pointer: fine)').matches

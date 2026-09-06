@@ -2,61 +2,151 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isOfftopicReply, MAX_PAPER_CARDS, OFFTOPIC_MARKER, stripPaperMarkers } from '../src/chat.js';
 import { copy } from '../src/content.js';
-import { createRenderer, inline, renderReading } from '../src/render.js';
+import { createRenderer, inline } from '../src/render.js';
 import { makeThread, showContent } from '../src/state.js';
-import { categories, emptySite, researchTopics, topics, type Content } from '../src/types.js';
-import { assertLink, assertText, site, textContent } from './helpers.js';
+import { cardsOf, commandOf, emptySite, idOf, paperCardId, sectionId, walk, type Content, type Node as SiteNode, type SectionId } from '../src/types.js';
+import { parseSiteMarkdown, siteFile } from '../src/markdown.js';
+import { assertLink, assertText, readLocal, site, textContent } from './helpers.js';
 
 const papers = site.publications;
+/** The sessions the file declares, in file order. */
+const topics: SectionId[] = site.sections.filter(commandOf).map(sectionId);
+/** The session whose section prints the publication cards. */
+const papersPage = site.sections.filter(section => commandOf(section) && cardsOf(section)).map(sectionId)[0];
 const renderer = createRenderer({ site, loadFailed: false });
+type View = ReturnType<typeof createRenderer>;
+const contentHTML = (view: View, content: Content) => view.message({ id: 'content', role: 'content', content });
+const presetHTML = (view: View, topic: string) => contentHTML(view, { kind: 'preset', topic });
+const detailHTML = (view: View, id: string) => contentHTML(view, { kind: 'paper', paperId: id });
+const cardsHTML = (view: View, ids: string[]) => view.message({
+  id: 'reply', role: 'assistant', text: ids.map(id => `[[paper:${id}]]`).join('\n'),
+  prompt: 'q', paperId: null, state: 'done', mode: 'live',
+});
+const messagesHTML = (view: View, thread: ReturnType<typeof makeThread>) => thread.messages.map(view.message).join('');
 const reply = (content: Content) => {
-  const thread = makeThread('content', 'chat');
+  const thread = makeThread();
   showContent(thread, content);
-  return renderer.messages(thread);
+  return messagesHTML(renderer, thread);
 };
 
-test('both homepage views preserve profile, research and CV facts and links', () => {
-  // Check the complete homepage without assigning facts to a particular section.
-  const interactive = renderer.profileCard() + topics.map(topic => renderer.page(topic)).join('');
-  for (const html of [interactive, renderReading(site)]) {
-    for (const value of [site.profile.name, site.profile.position, ...site.profile.bio]) assertText(html, value);
-    assertLink(html, `mailto:${site.profile.email}`);
-    for (const link of site.profile.links) assertLink(html, link.url);
-    assert.ok([...html.matchAll(/\bsrc=["']([^"']+)["']/g)].some(match => match[1] === site.profile.photo));
-    for (const interest of site.interests) {
-      assertText(html, interest.title);
-      assertText(html, interest.description);
-      for (const point of interest.points ?? []) {
-        assertText(html, point.title);
-        assertText(html, point.description);
-      }
-    }
-    for (const entry of [...site.experience, ...site.education, ...site.service, ...site.awards]) {
-      for (const value of Object.values(entry)) if (typeof value === 'string') assertText(html, value);
-      if ('links' in entry) for (const link of entry.links ?? []) assertLink(html, link.url);
-      if ('contributions' in entry) for (const contribution of entry.contributions ?? []) {
-        assertText(html, contribution.title);
-        assertText(html, contribution.description);
-      }
-    }
+const recordPage = (record: SiteNode) => presetHTML(createRenderer({
+  site: { ...site, sections: [site.sections[0], {
+    title: 'Records', fields: { command: '/records' }, prose: [], children: [record],
+  }] }, loadFailed: false,
+}), 'records');
+
+test('adding prose or children preserves the title, period and subtitle rendering', () => {
+  const record: SiteNode = {
+    title: 'Example institution', fields: { role: 'Researcher', location: 'Singapore', period: '2024 – 2026' },
+    prose: [], children: [],
+  };
+  // Compare the rendered metadata, ignoring the optional content that follows it.
+  const metadata = (html: string) => {
+    const start = html.indexOf('<h3>');
+    assert.ok(start >= 0, 'even a record without prose retains its heading');
+    return html.slice(start, html.indexOf('</p>', start) + 4);
+  };
+  const baseline = metadata(recordPage(record));
+  for (const content of [
+    { prose: ['Additional description.'], children: [] },
+    { prose: [], children: [{ title: 'Nested project', fields: {}, prose: [], children: [] }] },
+    { prose: ['Additional description.'], children: [{ title: 'Nested project', fields: {}, prose: [], children: [] }] },
+  ]) assert.equal(metadata(recordPage({ ...record, ...content })), baseline);
+  for (const value of [record.title, 'Researcher · Singapore', '2024 – 2026']) assertText(baseline, value);
+});
+
+test('nested headings preserve metadata, links, prose and embedded cards at every depth', () => {
+  const html = recordPage({
+    title: 'Parent', fields: { role: 'Researcher' }, prose: [], children: [{
+      title: 'Project', fields: { location: 'Singapore', links: '[Project](https://example.org/project)' },
+      prose: ['Project description.'], children: [{
+        title: 'Contribution', fields: { role: 'Contributor', period: '2026', links: '[Notes](https://example.org/notes)' },
+        prose: ['Contribution description.', `[[paper:${papers[0].id}]]`], children: [],
+      }],
+    }],
+  });
+  assert.match(html, /<h3>Parent<\/h3>/);
+  assert.match(html, /<h4>Project<\/h4>/);
+  assert.match(html, /<h5>Contribution<\/h5>/);
+  for (const value of ['Researcher', 'Singapore', 'Contributor', '2026', 'Project description.', 'Contribution description.']) assertText(html, value);
+  assert.doesNotMatch(textContent(html), /· Singapore/);
+  assertLink(html, 'https://example.org/project');
+  assertLink(html, 'https://example.org/notes');
+  assert.deepEqual(cardIds(html), [papers[0].id]);
+});
+
+test('authored lists use bold names and preserve fields, nesting, cards and adjacent headings', () => {
+  const parsed = parseSiteMarkdown(`${site.source}\n\n## List example\nCommand: /list-example
+
+- **First project**
+  Role: Researcher
+  Period: 2026
+  Links: [Notes](https://example.org/notes)
+
+  Project description.
+
+  [[paper:${papers[0].id}]]
+
+  - **Nested contribution**
+    Role: Contributor
+
+- **Second project**
+  Period: 2025
+
+### Another group
+
+- **Third project**
+  Location: Singapore
+`);
+  const html = presetHTML(createRenderer({ site: parsed, loadFailed: false }), 'list-example');
+  for (const name of ['First project', 'Nested contribution', 'Second project', 'Third project']) {
+    assert.ok(html.includes(`<strong>${name}</strong>`));
+    assert.ok(!new RegExp(`<h[1-6][^>]*>${name}</h[1-6]>`).test(html));
   }
-  for (const interest of site.interests) {
-    assertText(reply({ kind: 'research' }), interest.title);
-    assertText(reply({ kind: 'research' }), interest.description);
+  assert.match(html, /<h3>Another group<\/h3>/);
+  assert.equal([...html.matchAll(/<li\b/g)].length, 4);
+  assert.equal([...html.matchAll(/<ul\b/g)].length, 3);
+  assert.equal([...html.matchAll(/<\/ul>/g)].length, 3);
+  for (const value of ['Researcher', 'Contributor', '2026', '2025', 'Singapore', 'Project description.']) assertText(html, value);
+  assertLink(html, 'https://example.org/notes');
+  assert.deepEqual(cardIds(html), [papers[0].id]);
+});
+
+test('every session prints the headings, fields and paragraphs its section writes', () => {
+  const shell = topics.map(topic => presetHTML(renderer, topic)).join('');
+  for (const value of [site.profile.name, site.profile.position]) assertText(shell, value);
+  assertLink(shell, `mailto:${site.profile.email}`);
+  for (const link of site.profile.links) assertLink(shell, link.url);
+
+  // Routing and classification fields are not rendered as prose.
+  const asAttribute = new Set(['id', 'topic', 'paper', 'command', 'summary', 'cards']);
+  for (const section of site.sections.filter(commandOf)) {
+    const html = presetHTML(renderer, sectionId(section));
+    assertText(html, section.title);
+    for (const paragraph of section.prose) assertText(html, stripPaperMarkers(paragraph));
+    // A section that prints cards is covered by the publication test below.
+    if (cardsOf(section)) continue;
+    for (const node of walk(section.children)) {
+      assertText(html, node.title, `${section.title} is missing the heading "${node.title}"`);
+      for (const paragraph of node.prose) assertText(html, stripPaperMarkers(paragraph));
+      for (const [key, value] of Object.entries(node.fields)) {
+        if (key === 'links') for (const match of value.matchAll(/\((https?:\/\/[^\s)]+)\)/g)) assertLink(html, match[1]);
+        else if (!asAttribute.has(key)) assertText(html, value, `${node.title} is missing "${key}: ${value}"`);
+      }
+    }
   }
 });
 
 test('publication listings and details preserve titles, authors, years and source links', () => {
-  const reading = renderReading(site);
   for (const paper of papers) {
-    for (const html of [renderer.papers([paper]), reply({ kind: 'publications' }), renderer.page('publications'), reading,
-      renderer.paperDetail(paper), reply({ kind: 'paper', paperId: paper.id })]) {
+    for (const html of [cardsHTML(renderer, [paper.id]), reply({ kind: 'preset', topic: papersPage }), presetHTML(renderer, papersPage),
+      detailHTML(renderer, paper.id), reply({ kind: 'paper', paperId: paper.id })]) {
       for (const value of [paper.title, String(paper.year)]) assertText(html, value);
       assertLink(html, paper.links.paper);
       if (paper.links.code) assertLink(html, paper.links.code);
     }
     // Summaries may abbreviate authors; the full record must remain accurate.
-    for (const html of [renderer.paperDetail(paper), reply({ kind: 'paper', paperId: paper.id }), reading]) {
+    for (const html of [detailHTML(renderer, paper.id), reply({ kind: 'paper', paperId: paper.id })]) {
       assertText(html, paper.authors);
       assertText(html, paper.venue);
     }
@@ -67,34 +157,78 @@ test('publication listings and details preserve titles, authors, years and sourc
   }
 });
 
-test('filtered publication content includes matching papers and excludes unrelated papers', () => {
-  for (const filter of [...categories.map(category => ({ category })), ...researchTopics.map(topic => ({ topic }))]) {
-    const html = reply({ kind: 'publications', ...filter });
-    for (const paper of papers) {
-      const matches = 'category' in filter ? paper.category === filter.category : paper.topic === filter.topic;
-      if (matches) assertText(html, paper.title);
-      else assert.ok(!textContent(html).includes(paper.title), `Unrelated publication: ${paper.id}`);
-    }
-  }
+test('a publication topic is escaped on its card', () => {
+  const unsafe = '"><img src=x onerror=alert(1)>';
+  const hostile = { ...emptySite(), publications: [{ ...papers[0], topic: unsafe }], interests: [{ title: 'T', description: 'D', topic: unsafe }] };
+  const html = cardsHTML(createRenderer({ site: hostile, loadFailed: false }), [papers[0].id]);
+  assert.ok(!html.includes('<img src=x'), 'a topic must never reach the page as markup');
+  assert.ok(html.includes('&lt;img') || html.includes('&quot;&gt;&lt;img'));
 });
 
 test('terminal presets print complete section data in the shared output', () => {
-  const thread = makeThread('terminal', 'chat');
-  for (const topic of topics) showContent(thread, { kind: 'preset', topic }, true);
-  const html = renderer.messages(thread);
-  for (const paragraph of site.profile.bio) assertText(html, paragraph);
+  const thread = makeThread();
+  for (const topic of topics) showContent(thread, { kind: 'preset', topic });
+  const html = messagesHTML(renderer, thread);
   for (const paper of papers) { assertText(html, paper.title); assertLink(html, paper.links.paper); }
-  for (const entry of site.experience) assertText(html, entry.organization);
-  for (const entry of site.education) assertText(html, entry.institution);
-  for (const entry of site.service) assertText(html, entry.venue);
-  for (const entry of site.awards) assertText(html, entry.title);
+  // Every heading the file writes under a session reaches the shared output.
+  for (const section of site.sections.filter(commandOf)) {
+    if (cardsOf(section)) continue;
+    for (const node of walk(section.children)) assertText(html, node.title);
+  }
+});
+
+test('every command prints its own section of data/site.md, headings and order included', async () => {
+  const source = await readLocal(siteFile);
+  // The sessions are the file's `##` sections that declare a command, in file order.
+  const written = [...source.matchAll(/^## (.+)$/gm)].map(match => match[1]);
+  assert.deepEqual(site.sections.map(section => section.title), written);
+  assert.deepEqual(topics, site.sections.filter(commandOf).map(sectionId));
+
+  for (const section of site.sections.filter(commandOf)) {
+    const id = sectionId(section);
+    const html = presetHTML(renderer, id);
+    assertText(html, section.title, `${id} prints the file's own heading`);
+    for (const paragraph of section.prose) assertText(html, paragraph, `${id} prints the file's intro`);
+    // A heading may also occur as prose elsewhere — the file's own bio names Skywork AI,
+    // and a contribution names its paper — so records are not proven unique by their text.
+    // Sections can list a collection or embed individual cards in their prose.
+    const embedded = [...walk([section])].flatMap(node => node.prose.map(paperCardId).filter(Boolean));
+    if (!cardsOf(section)) assert.deepEqual(cardIds(html), embedded, `/${id} renders its embedded cards`);
+  }
+  // The section named by `Cards` supplies the papers, in the order that section writes them.
+  const cardSection = site.sections.find(section => commandOf(section) && cardsOf(section))!;
+  assert.deepEqual(cardIds(presetHTML(renderer, sectionId(cardSection))), site.publications.map(paper => paper.id));
+  // The section holding the papers has no command of its own, so it is never printed twice.
+  const data = site.sections.find(section => sectionId(section) === cardsOf(cardSection))!;
+  assert.equal(commandOf(data), undefined, 'the publications section is data, not a session');
+  assert.deepEqual(data.children.map(idOf), site.publications.map(paper => paper.id));
+});
+
+/** The publications rendered as cards, in the order they appear. */
+const cardIds = (html: string) => [...html.matchAll(/data-ask="([a-z0-9-]+)"/g)].map(match => match[1]);
+
+test('work contributions embed complete, actionable paper cards without the chat limit', () => {
+  const html = presetHTML(renderer, 'work');
+  const ids = ['skyreels-v4', 'derl-swe', 'skywork-or1', 'skywork-reward-v2', 'llm-background-knowledge'];
+  assert.deepEqual(cardIds(html), ids);
+  assert.doesNotMatch(html, /\[\[paper:|cv-paper-link/);
+  for (const id of ids) {
+    const paper = papers.find(paper => paper.id === id)!;
+    assertText(html, paper.title);
+    assertText(html, paper.authors);
+    assertText(html, paper.venueShort);
+    assertLink(html, paper.links.paper);
+    if (paper.links.code) assertLink(html, paper.links.code);
+    assert.ok(html.includes(`data-paper="${id}"`));
+  }
+  assertText(html, 'Website & slide-generation agents');
 });
 
 test('unavailable data does not render missing values or unrelated publication facts', () => {
   const empty = createRenderer({ site: emptySite(), loadFailed: true });
-  const thread = makeThread('content', 'chat');
-  for (const content of [{ kind: 'research' }, { kind: 'publications' }, { kind: 'paper', paperId: 'missing' }] as const) showContent(thread, content);
-  for (const html of [...topics.map(topic => empty.page(topic)), empty.profileCard(), empty.messages(thread), reply({ kind: 'paper', paperId: 'missing' })]) {
+  const thread = makeThread();
+  for (const content of [{ kind: 'preset', topic: papersPage }, { kind: 'paper', paperId: 'missing' }] as const) showContent(thread, content);
+  for (const html of [...topics.map(topic => presetHTML(empty, topic)), messagesHTML(empty, thread), reply({ kind: 'paper', paperId: 'missing' })]) {
     assert.doesNotMatch(textContent(html), /\b(undefined|null|NaN)\b/);
     for (const paper of papers) assert.ok(!textContent(html).includes(paper.title));
   }
@@ -111,11 +245,11 @@ test('dynamic paper and message text is escaped in every rendering surface', () 
   const unsafe = '<img src=x onerror=alert(1)>';
   const paper = { ...papers[0], title: unsafe, authors: unsafe, links: { paper: 'javascript:alert(1)' } };
   const renderer = createRenderer({ site: { ...site, publications: [paper] }, loadFailed: false });
-  const thread = makeThread('test', 'chat');
+  const thread = makeThread();
   thread.messages.push({ id: 'message', role: 'user', text: unsafe });
   showContent(thread, { kind: 'paper', paperId: paper.id });
-  showContent(thread, { kind: 'publications' });
-  for (const html of [renderer.papers([paper]), renderer.page('publications'), renderer.paperDetail(paper), renderer.paperContext(paper), renderer.messages(thread), renderReading({ ...site, publications: [paper] })]) {
+  showContent(thread, { kind: 'preset', topic: papersPage });
+  for (const html of [cardsHTML(renderer, [paper.id]), presetHTML(renderer, papersPage), detailHTML(renderer, paper.id), renderer.paperContext(paper), messagesHTML(renderer, thread)]) {
     assert.ok(html.includes('&lt;img'));
     assert.ok(!html.includes(unsafe));
     assert.doesNotMatch(html, /href="javascript:/);
@@ -124,9 +258,9 @@ test('dynamic paper and message text is escaped in every rendering surface', () 
 
 test('an off-topic refusal shows the page’s own notice and never the marker', () => {
   const answer = (text: string) => {
-    const thread = makeThread('reply', 'chat');
+    const thread = makeThread();
     thread.messages.push({ id: 'reply', role: 'assistant', text, prompt: 'q', paperId: null, state: 'done', mode: 'live' });
-    return renderer.messages(thread);
+    return messagesHTML(renderer, thread);
   };
   // The model writes only the marker; the visitor reads wording that comes from the site.
   for (const refusal of [OFFTOPIC_MARKER, ` ${OFFTOPIC_MARKER}\n`, '[[ OffTopic ]]']) {
@@ -147,15 +281,15 @@ test('an off-topic refusal shows the page’s own notice and never the marker', 
 
 test('publications the assistant names are rendered from site data, not from its own words', () => {
   const answer = (text: string) => {
-    const thread = makeThread('reply', 'chat');
+    const thread = makeThread();
     thread.messages.push({ id: 'reply', role: 'assistant', text, prompt: 'q', paperId: null, state: 'done', mode: 'live' });
-    return renderer.messages(thread);
+    return messagesHTML(renderer, thread);
   };
   const cards = (html: string) => [...html.matchAll(/class="paper-title"/g)].length;
   const [first, second, third, fourth] = papers;
 
   // The card's ask action reads as the command it stands in for, and still carries the paper.
-  const card = renderer.papers([first]);
+  const card = cardsHTML(renderer, [first.id]);
   assertText(card, `[${copy.openPaper}]`);
   assert.ok(card.includes(`>${copy.askCommand}<`), 'the ask action shows the /ask token');
   assert.ok(card.includes(`data-ask="${first.id}"`) && card.includes(`aria-label="${copy.askPaper}"`));
@@ -223,11 +357,23 @@ test('publications the assistant names are rendered from site data, not from its
 test('a publication abstract is shown on its detail and reaches the assistant verbatim', () => {
   const withAbstract = { ...papers[0], abstract: 'We study how engines weave algebraic patterns.' };
   const view = createRenderer({ site: { ...site, publications: [withAbstract] }, loadFailed: false });
-  assertText(view.paperDetail(withAbstract), withAbstract.abstract);
-  assertText(view.paperDetail(withAbstract), copy.abstract);
+  assertText(detailHTML(view, withAbstract.id), withAbstract.abstract);
+  assertText(detailHTML(view, withAbstract.id), copy.abstract);
   // Listings stay compact: the abstract belongs to the detail, not to every card.
-  assert.ok(!textContent(view.papers([withAbstract])).includes(withAbstract.abstract));
+  assert.ok(!textContent(cardsHTML(view, [withAbstract.id])).includes(withAbstract.abstract));
   // A paper without one renders no empty Abstract label.
   const { abstract, ...bare } = withAbstract;
-  assert.ok(!textContent(view.paperDetail(bare)).includes(copy.abstract));
+  assert.ok(!textContent(detailHTML(createRenderer({ site: { ...site, publications: [bare] }, loadFailed: false }), bare.id)).includes(copy.abstract));
+});
+
+test('a section named chat uses the same preset template and abstracts render embedded cards', () => {
+  const parsed = parseSiteMarkdown(`${site.source}\n## Conversation research\nCommand: /chat\n\nWritten in the file.`);
+  const view = createRenderer({ site: parsed, loadFailed: false });
+  assertText(presetHTML(view, 'chat'), 'Written in the file.');
+  const first = { ...papers[0], abstract: `First paragraph.\n\n[[paper:${papers[1].id}]]\n\nLast paragraph.` };
+  const detail = detailHTML(createRenderer({ site: { ...site, publications: [first, papers[1]] }, loadFailed: false }), first.id);
+  assertText(detail, 'First paragraph.');
+  assertText(detail, 'Last paragraph.');
+  assert.deepEqual(cardIds(detail).slice(0, 1), [papers[1].id]);
+  assert.doesNotMatch(detail, /\[\[paper:/);
 });
