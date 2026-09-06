@@ -1,5 +1,5 @@
 # Deploys the chat backend (Cloudflare Worker) whenever its code or the site data changes.
-# Requires two repository secrets: CLOUDFLARE_API_TOKEN (Workers Scripts:Edit, Workers KV Storage:Edit)
+# Requires two repository secrets: CLOUDFLARE_API_TOKEN (the "Edit Cloudflare Workers" template: Workers Scripts, Durable Objects, legacy KV)
 # and CLOUDFLARE_ACCOUNT_ID. Without them the deploy step is skipped, so the Pages deploy is unaffected.
 # The OPENAI_API_KEY secret is stored on the worker itself: npm run worker:secret
 name: Deploy chat worker

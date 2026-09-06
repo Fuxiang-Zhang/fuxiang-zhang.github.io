@@ -49,7 +49,7 @@ Open http://127.0.0.1:3000 . Source changes are recompiled automatically; refres
 | `http://127.0.0.1:3000/?chat=mock` | Mock replies, no backend call |
 | `http://127.0.0.1:3000/?chat=local` | The local Node server's `/api/chat`; live replies only with `OPENAI_API_KEY` in `.env`, otherwise mock |
 
-The status bar shows the current mode: `chat: live` means the backend has a model connected, `chat: simulated` means mock replies, and `chat: budget used up` means today's token budget is spent.
+The status bar shows the current mode: `chat: connected` means a backend is configured and its status has not arrived yet, `chat: live` means the backend has a model connected, `chat: simulated` means mock replies, and `chat: budget used up` means today's token budget is spent.
 
 ## Common commands
 
@@ -101,7 +101,7 @@ Typing `/` shows candidates; Up/Down select, Tab completes, Enter runs, Escape c
 
 ## Frontend design
 
-The homepage is one continuous terminal transcript set in the self-hosted Maple Mono monospace font. The content column is 140 characters wide, light by default with a dark theme toggle. The opening screen shows a banner spelled out in block characters from the name, the position, the biography, the links, authored navigation links under the biography, and the input hint. Command output and chat replies are appended to the end of the same transcript; earlier output stays until the page is reloaded. Only the theme preference is stored on the device.
+The homepage is one continuous terminal transcript set in the self-hosted Maple Mono monospace font. The content column is 140 characters wide, light by default with a dark theme toggle. The opening screen shows a banner spelled out in block characters from the name, the position, the biography, the links, authored navigation links under the biography, and the input hint. Command output and chat replies are appended to the end of the same transcript; earlier output stays until the page is reloaded. The page itself stores only the theme preference on the device. On the published hostname, `src/config.ts` additionally loads Google Analytics (gtag), which sets its own cookies; the local preview and other hosts load no analytics.
 
 - **Progressive output.** Live chat text appears as network deltas arrive. Command output and mock replies use a word-by-word writer (`src/stream.ts`) at a fixed 40 words per second, paced by elapsed time so the speed is independent of frame rate and text length. The page follows the newest text while writing; scrolling up stops following. The opening screen appears at once. Appending output preserves existing DOM nodes and animations.
 - **Input.** Typing or pasting anywhere outside an editable region goes into the prompt. Text selection, copying, browser shortcuts, and IME composition keep their native behavior.
@@ -242,7 +242,7 @@ All backend logic lives in `chat/`. The entry point is `handleChat(request, env)
 | `POST /api/chat` | Ask | Request `{ message, paperId?, history? }`; live replies stream NDJSON, mock replies return `{ id, text, mode, budget? }` |
 | `OPTIONS /api/chat` | Preflight | 204 only for origins in `ALLOWED_ORIGINS` |
 
-Before streaming starts, errors come back as `{ error }`: 400 invalid input, 403 origin not allowed, 413 request too large, 415 not JSON, 429 rate limit or budget exhausted (with `Retry-After`), 503 storage/service unavailable. After streaming starts (HTTP 200), model failures are delivered as an `error` event with status 502. The frontend shows the `error` text of 429, 502 and 503 responses to the visitor as is. Full types are in `src/types.ts`.
+Before streaming starts, errors come back as `{ error }`: 400 invalid input, 403 origin not allowed, 405 other methods (with `Allow`), 413 request too large, 415 not JSON, 429 rate limit or budget exhausted (with `Retry-After`), 503 storage/service unavailable. The Worker answers every other path with 404. After streaming starts (HTTP 200), model failures are delivered as an `error` event with status 502. The frontend shows the `error` text of 429, 502 and 503 responses to the visitor as is. Full types are in `src/types.ts`.
 
 Live responses have `Content-Type: application/x-ndjson`. Each newline terminates one event:
 
@@ -325,7 +325,7 @@ The backend URL is `productionChatEndpoint` in `src/config.ts`, currently pointi
 3. `npm run worker:deploy`. The output names the URL, `https://fuxiang-homepage-chat.<subdomain>.workers.dev`; confirm with `curl <url>/api/chat` that `mode` is `live`.
 4. After changing `[vars]` or code, run `npm run worker:deploy` again.
 
-Optional automation: add the repository secrets `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" token template) and `CLOUDFLARE_ACCOUNT_ID`. `.github/workflows/deploy-worker.yml` then redeploys the Worker whenever backend or shared `src/` code, data, build configuration, tests or dependencies change; without the secrets that step is skipped.
+Optional automation: add the repository secrets `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" token template, which covers Workers Scripts, Durable Objects and the legacy KV namespace) and `CLOUDFLARE_ACCOUNT_ID`. `.github/workflows/deploy-worker.yml` then redeploys the Worker whenever backend or shared `src/` code, data, build configuration, tests or dependencies change; without the secrets that step is skipped.
 
 Deployment requires a Cloudflare account that supports SQLite-backed Durable Objects. This repository does not deploy as part of `npm run build` or `npm test`.
 
@@ -339,9 +339,27 @@ Deployment requires a Cloudflare account that supports SQLite-backed Durable Obj
 | `render.test.ts` | Rendered content matches `data/site.md`, links are correct, text is escaped, missing data is not presented as facts, papers named by the assistant render from site data and unknown or excess markers are dropped |
 | `state.test.ts` | Question and paper context, retries, bounded conversation history and progressive text output |
 | `commands.test.ts` / `input.test.ts` | Slash command parsing and completion, global typing and IME behavior |
-| `chat.test.ts` | Backend: mock replies, CORS, request validation, hourly limit, daily ledger and budget refusal, instruction content, plain-text reply validation and charged failure accounting |
-| `counters.test.ts` | Real local Cloudflare runtime: atomic increments, hourly limits and one-time legacy KV migration |
+| `chat.test.ts` | Backend: mock replies, CORS, request validation, hourly limit, daily ledger and budget refusal, instruction content, plain-text reply validation, charged failure accounting and numeric settings |
+| `streaming.test.ts` | Streaming path end to end: deltas reach the client before provider completion, usage is committed once, accounting failures keep the answer and are not retried, cancelling the body aborts the provider, NDJSON decoding across UTF-8 and line boundaries, the shared 60-second deadline on both sides, and partial text kept after failure or stop |
+| `counters.test.ts` | Real local Cloudflare runtime (Miniflare): atomic increments across clients, hourly limits and one-time legacy KV migration |
 | `budget.test.ts` | Midnight status failures retry, healthy budgets stop polling |
-| `server.test.ts` | Served data and social preview image match source files |
+| `server.test.ts` | Served data and social preview image match source files; Node forwards the first delta immediately and cancels upstream on disconnect |
 
 The tests constrain content accuracy and API behavior. Rendering tests call the same message renderer as the application, including shared record structure and escaping. They do not replace a browser check for visual problems. Provider response tests stub network requests and use fake keys; no real model calls are part of the automated tests; after deploying, ask a question or two and read the ledger to confirm.
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `data/site.md` | The homepage content and structure: the single source for the page and the chat instructions |
+| `index.html`, `styles.css`, `assets/` | Page template with `{{…}}` metadata placeholders, terminal styles, the Maple Mono font and its license, favicon and photo |
+| `src/` | Browser code and the parser shared with the backend. `markdown-engine.ts`, `markdown-details.ts` and `markdown.ts` parse the site; `types.ts` validates it and holds the chat contract; `render.ts` produces HTML; `app.ts` drives the transcript with `state.ts`, `commands.ts`, `input.ts`, `stream.ts`, `banner.ts`, `budget.ts` and `chat.ts`; `chat-deadline.ts`, `config.ts` and `content.ts` hold the timeout, backend URL and interface copy |
+| `chat/` | Platform-independent backend: `handler.ts` (request handling), `limits.ts` (rate limits and the usage ledger), `openai.ts` (model call), `prompt.ts` (instructions) |
+| `worker/` | Cloudflare Worker entry (`index.ts`), the `ChatCounters` Durable Object (`counters.ts`) and the text-module declaration for `.md` imports |
+| `server.ts` | Local static file server with the same chat handler mounted at `/api/chat` |
+| `scripts/` | `build.mjs` bootstraps the compiler, `build.ts` produces the static export, `dev.ts` watches sources and restarts the preview |
+| `tests/` | Node test suite; `helpers.ts` loads `data/site.md` and compares rendered text |
+| `redirect/` | Legacy redirect page, copied into the export unchanged |
+| `.github/workflows/` | GitHub Pages deployment (`static.yml`) and optional Worker deployment (`deploy-worker.yml`) |
+| `wrangler.toml`, `.env.example` | Worker configuration and the local environment template |
+| `.build/`, `dist/` | Generated compiled TypeScript and the static export; ignored by git |
