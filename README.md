@@ -92,6 +92,7 @@ Every visible `##` section declares a `Command`; `/help` is built in. Commands a
 | `/bio` | Profile component, biography and authored navigation links |
 | `/research` | Research headings, explicitly declared collapses and paper references |
 | `/papers` | Publication cards, in the source's written order |
+| `/papers <id>` | One publication's details; the line echoed when a card title is clicked |
 | `/work` | Employer records with nested project lists |
 | `/education` | Education records as list items |
 | `/misc` | Service and Awards as third-level headings, each followed by a list |

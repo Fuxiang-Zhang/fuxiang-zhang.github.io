@@ -19,7 +19,17 @@ test('slash commands browse the intended section, while prose remains a question
 test('unknown commands and unsupported arguments never fall through to chat', () => {
   for (const input of ['/unknown', '/papers --year 2025', '/bio\nhello', '/pa', '/', '/BIO']) {
     assert.equal(parseInput(input, commands).kind, 'invalid');
+    assert.equal(parseInput(input, commands, site).kind, 'invalid');
   }
+});
+
+test('the papers command takes one existing paper id, as echoed for a card click', () => {
+  const [paper] = site.publications;
+  assert.deepEqual(parseInput(`  /papers ${paper.id} `, commands, site), { kind: 'paper', paperId: paper.id });
+  for (const input of [`/papers ${paper.id} extra`, '/papers missing-paper', `/bio ${paper.id}`, `/papers ${paper.id.toUpperCase()}`]) {
+    assert.equal(parseInput(input, commands, site).kind, 'invalid', input);
+  }
+  assert.equal(parseInput(`/papers ${paper.id}`, commands).kind, 'invalid', 'without site data no ids are known');
 });
 
 test('the command list is exactly what data/site.md declares, in file order', () => {

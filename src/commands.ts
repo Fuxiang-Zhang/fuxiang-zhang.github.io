@@ -25,15 +25,26 @@ export function buildCommands(site: SiteData): readonly Command[] {
 }
 
 export type ParsedInput = { kind: 'empty' } | { kind: 'question'; text: string }
-  | { kind: 'command'; command: Command } | { kind: 'invalid' };
+  | { kind: 'command'; command: Command } | { kind: 'paper'; paperId: string } | { kind: 'invalid' };
 
-/** Slash input is always handled locally, including unknown commands. */
-export function parseInput(value: string, commands: readonly Command[]): ParsedInput {
+/** The command that prints the publication cards; it alone takes a paper id as its argument. */
+export const papersCommand = (commands: readonly Command[], site: SiteData): Command | undefined =>
+  commands.find(command => site.sections.some(section => sectionId(section) === command.topic && section.fields.cards));
+
+/**
+ * Slash input is always handled locally, including unknown commands.
+ * `/papers <id>` opens one publication, the same line the page echoes for a card click.
+ */
+export function parseInput(value: string, commands: readonly Command[], site?: SiteData): ParsedInput {
   const text = value.trim();
   if (!text) return { kind: 'empty' };
   if (!text.startsWith('/')) return { kind: 'question', text };
   const command = commands.find(command => command.name === text);
-  return command ? { kind: 'command', command } : { kind: 'invalid' };
+  if (command) return { kind: 'command', command };
+  const [name, id, ...rest] = text.split(/\s+/);
+  if (site && id && !rest.length && name === papersCommand(commands, site)?.name
+    && site.publications.some(paper => paper.id === id)) return { kind: 'paper', paperId: id };
+  return { kind: 'invalid' };
 }
 
 export function matchCommands(value: string, commands: readonly Command[]): readonly Command[] {

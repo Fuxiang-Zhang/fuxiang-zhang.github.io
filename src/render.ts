@@ -188,7 +188,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       const content = message.content;
       const command = content.kind === 'preset' ? commandForTopic(commands, content.topic)?.name ?? content.topic
         : content.kind === 'help' ? '/help'
-        : papersCommand;
+        : `${papersCommand} ${content.paperId}`.trim();
       return `<div class="message content-message" ${anchor}>${promptLine(command)}<div class="message-body">${contentBody(content)}</div></div>`;
     }
     if (message.state === 'pending') {

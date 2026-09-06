@@ -103,6 +103,15 @@ test('every authored visible heading, record and paragraph reaches its section',
   }
 });
 
+test('paper details echo the papers command with the paper id, so the line can be typed back', () => {
+  const command = site.sections.filter(section => commandOf(section) && cardsOf(section)).map(commandOf)[0];
+  for (const paper of papers) {
+    const html = reply({ kind: 'paper', paperId: paper.id });
+    assert.match(html, new RegExp(`class="command-echo">.*</span> ${command} ${paper.id}</div>`));
+  }
+  assert.match(reply({ kind: 'preset', topic: papersPage }), new RegExp(`</span> ${command}</div>`), 'the listing itself takes no argument');
+});
+
 test('publication listings and details preserve titles, authors, years and source links', () => {
   for (const paper of papers) {
     for (const html of [cardsHTML(renderer, [paper.id]), reply({ kind: 'preset', topic: papersPage }), presetHTML(renderer, papersPage),

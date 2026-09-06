@@ -231,24 +231,28 @@ function renderCommands() {
   input.setAttribute('aria-activedescendant', `command-option-${selectedCommand}`);
   document.getElementById(`command-option-${selectedCommand}`)?.scrollIntoView({ block: 'nearest' });
 }
-function executeCommand(command: Command, fromInput = false) {
+/** Prints command output, clearing the prompt when the command was typed there. */
+function execute(content: Content, fromInput = false) {
   if (holdWhilePrinting()) return;
   if (fromInput) { input.value = ''; state.current.draft = ''; }
   $('#command-error').hidden = true;
   closeCommands();
-  if (command.topic) show({ kind: 'preset', topic: command.topic });
-  else show({ kind: 'help' });
+  show(content);
   updateComposer();
   if (fromInput) input.focus({ preventScroll: true });
+}
+function executeCommand(command: Command, fromInput = false) {
+  execute(command.topic ? { kind: 'preset', topic: command.topic } : { kind: 'help' }, fromInput);
 }
 function submitInput() {
   if (Boolean(pending)) { void sendMessage(); return; }
   if (holdWhilePrinting()) return;
-  const parsed = parseInput(input.value, pageCommands);
+  const parsed = parseInput(input.value, pageCommands, state.site);
   if (parsed.kind === 'command') { executeCommand(parsed.command, true); return; }
+  if (parsed.kind === 'paper') { execute({ kind: 'paper', paperId: parsed.paperId }, true); return; }
   if (parsed.kind === 'invalid') {
     closeCommands();
-    $('#command-error').textContent = 'Unknown command or unsupported arguments. Type / to see available commands.';
+    $('#command-error').textContent = 'Unknown command, paper id or arguments. Type / to see available commands.';
     $('#command-error').hidden = false;
     input.focus();
     return;
