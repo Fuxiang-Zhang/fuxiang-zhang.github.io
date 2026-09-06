@@ -67,6 +67,50 @@ function renderMessages(followLatest = true) {
   revealNext.clear();
 }
 const nearBottom = () => scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight < 48;
+const panelReveals = new WeakMap<HTMLDetailsElement, Reveal>();
+const revealedPanels = new WeakSet<HTMLDetailsElement>();
+function revealCollapse(panel: HTMLDetailsElement) {
+  if (!panel.open) {
+    panelReveals.get(panel)?.cancel();
+    panelReveals.delete(panel);
+    revealedPanels.delete(panel);
+    return;
+  }
+  const body = panel.querySelector<HTMLElement>('.collapse-body');
+  if (!body || revealedPanels.has(panel)) return;
+  revealedPanels.add(panel);
+  if (reduceMotion.matches) return;
+  // Follow the expanding panel, rather than jumping past it to later sections.
+  // An upward scroll hands control back to the reader for this reveal.
+  let following = true;
+  let previousTop = scrollArea.scrollTop;
+  const onScroll = () => {
+    if (scrollArea.scrollTop < previousTop - 2) following = false;
+    previousTop = scrollArea.scrollTop;
+  };
+  scrollArea.addEventListener('scroll', onScroll);
+  const reveal = revealHTML(body, body.innerHTML, {
+    instantSelector: '.collapse-body, .name-banner',
+    onStep: () => {
+      body.querySelectorAll<HTMLDetailsElement>('.content-collapse[open]').forEach(revealCollapse);
+      if (!following || !panel.open) return;
+      const overflow = body.getBoundingClientRect().bottom - scrollArea.getBoundingClientRect().bottom + 20;
+      if (overflow > 0) scrollArea.scrollTop += overflow;
+      previousTop = scrollArea.scrollTop;
+    },
+  });
+  previousTop = scrollArea.scrollTop;
+  panelReveals.set(panel, reveal);
+  void reveal.done.then(() => {
+    scrollArea.removeEventListener('scroll', onScroll);
+    if (panelReveals.get(panel) === reveal) panelReveals.delete(panel);
+  });
+}
+// Native details handles both pointer and keyboard activation; toggle does not bubble.
+document.addEventListener('toggle', event => {
+  const panel = event.target;
+  if (panel instanceof HTMLDetailsElement && panel.matches('.content-collapse')) revealCollapse(panel);
+}, true);
 /** Streams a rendered reply into view, following the newest text until the reader scrolls away. */
 function startReveal(id: string, body: HTMLElement, followLatest: boolean) {
   if (reduceMotion.matches) return;
@@ -75,7 +119,13 @@ function startReveal(id: string, body: HTMLElement, followLatest: boolean) {
   scrollArea.addEventListener('scroll', onScroll);
   scrollArea.style.scrollBehavior = 'auto';
   const reveal = revealHTML(body, body.innerHTML, {
-    onStep: () => { if (following) scrollArea.scrollTop = scrollArea.scrollHeight; },
+    instantSelector: '.collapse-body, .name-banner',
+    onStep: () => {
+      const openPanels = body.querySelectorAll<HTMLDetailsElement>('.content-collapse[open]');
+      // A visitor may open a heading before its body reaches the overview stream.
+      openPanels.forEach(revealCollapse);
+      if (following && !openPanels.length) scrollArea.scrollTop = scrollArea.scrollHeight;
+    },
   });
   reveals.set(id, reveal);
   void reveal.done.then(() => {
@@ -224,7 +274,13 @@ async function sendMessage(retryId?: string) {
   input.value = thread.draft;
   const controller = new AbortController();
   pending = controller;
-  const timeout = setTimeout(() => controller.abort(new DOMException('Request timed out', 'TimeoutError')), 60000);
+  let frame = 0;
+  const paint = () => {
+    frame = 0;
+    const following = nearBottom();
+    renderMessages(following);
+    if (following) scrollToLatest();
+  };
   renderMessages();
   updateComposer();
   scrollToLatest();
@@ -233,13 +289,18 @@ async function sendMessage(retryId?: string) {
     const result = await requestReply({
       message: reply.prompt, paperId: reply.paperId,
       history: conversationHistory(thread, reply.id), signal: controller.signal,
+      onDelta: text => {
+        reply.text += text;
+        reply.mode = 'live';
+        if (!frame) frame = requestAnimationFrame(paint);
+      },
     }, siteConfig.chatEndpoint);
     controller.signal.throwIfAborted();
     reply.text = result.text;
     reply.mode = result.mode;
     reply.error = undefined;
     reply.state = 'done';
-    revealNext.add(reply.id);
+    if (result.mode === 'mock') revealNext.add(reply.id);
     renderChatMode(result.mode);
     applyBudget(result.budget);
     announce(t(result.mode === 'live' ? 'aiReply' : 'simulated') + ': ' + result.text);
@@ -250,7 +311,7 @@ async function sendMessage(retryId?: string) {
     if (error instanceof ChatError) applyBudget(error.budget ?? undefined);
     announce(reply.state === 'stopped' ? t('stopped') : reply.error ?? t('failed'));
   } finally {
-    clearTimeout(timeout);
+    if (frame) cancelAnimationFrame(frame);
     pending = undefined;
     const following = nearBottom();
     renderMessages(following);
@@ -309,7 +370,7 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape') closeCommands();
   if (event.defaultPrevented || input.readOnly || isEditing(event.target) || hasTextSelection()) return;
   const target = event.target instanceof Element ? event.target : null;
-  const action = typingAction(event, Boolean(target?.closest('button, a, [role="button"]')));
+  const action = typingAction(event, Boolean(target?.closest('button, a, summary, [role="button"]')));
   if (!action) return;
   input.focus({ preventScroll: true });
   // IME and dead keys must complete through the browser's native composition path.
@@ -348,11 +409,17 @@ document.addEventListener('paste', event => {
 document.addEventListener('pointerup', event => {
   const target = event.target instanceof Element ? event.target : null;
   if (event.pointerType !== 'mouse' || event.button !== 0 || input.readOnly || hasTextSelection()
-    || !target?.closest('#app-shell') || target.closest('a, button, input, textarea, select, [contenteditable], [role="option"]')) return;
+    || !target?.closest('#app-shell') || target.closest('a, button, summary, input, textarea, select, [contenteditable], [role="option"]')) return;
   input.focus({ preventScroll: true });
 });
 document.addEventListener('click', async event => {
   const target = event.target instanceof Element ? event.target : null;
+  const authoredLink = target?.closest<HTMLAnchorElement>('a[href^="#"]');
+  if (authoredLink && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    const hash = authoredLink.getAttribute('href');
+    const command = pageCommands.find(c => hash === `#${c.topic ?? c.action}`);
+    if (command) { event.preventDefault(); executeCommand(command); return; }
+  }
   const commandTarget = target?.closest<HTMLElement>('[data-command]');
   if (commandTarget) {
     if (commandTarget instanceof HTMLAnchorElement && (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) return;
@@ -407,6 +474,18 @@ try {
 } catch { state.loadFailed = true; }
 view = createRenderer(state);
 pageCommands = buildCommands(state.site);
+if (!state.loadFailed) {
+  document.title = state.site.profile.title;
+  for (const selector of ['meta[name="description"]', 'meta[property="og:description"]']) document.querySelector(selector)?.setAttribute('content', state.site.profile.description);
+  document.querySelector('meta[property="og:title"]')?.setAttribute('content', state.site.profile.title);
+  const homeLink = document.querySelector<HTMLAnchorElement>('#home-link');
+  const homeCommand = pageCommands.find(command => command.topic === state.site.profile.home);
+  if (homeLink) {
+    homeLink.textContent = state.site.profile.title;
+    homeLink.href = `#${state.site.profile.home}`;
+    homeLink.dataset.command = homeCommand?.name ?? '';
+  }
+}
 papersById = new Map(state.site.publications.map(paper => [paper.id, paper]));
 input.maxLength = MAX_MESSAGE;
 renderTheme();

@@ -60,11 +60,11 @@ export function resolveRoute(hash: string, site: SiteData): Content | null {
   const paperSection = site.sections.find(section => section.fields.cards && commandOf(section));
   const papers = paperSection ? sectionId(paperSection) : undefined;
   const aliases: Record<string, string | undefined> = {
-    overview: ids.includes('bio') ? 'bio' : ids[0],
+    overview: site.profile.home,
     journey: 'work', experiences: 'work', miscellaneous: 'misc',
     publication: papers,
     publications: papers,
   };
   const alias = aliases[name];
-  return { kind: 'preset', topic: alias && ids.includes(alias) ? alias : ids[0] ?? '' };
+  return { kind: 'preset', topic: alias && ids.includes(alias) ? alias : site.profile.home };
 }

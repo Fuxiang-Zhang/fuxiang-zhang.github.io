@@ -5,6 +5,8 @@
  * A future backend can feed the same writer with streamed text instead.
  */
 export interface RevealOptions {
+  /** Insert these subtrees intact, without spending animation time on hidden text. */
+  instantSelector?: string;
   /** Called after every batch of tokens, e.g. to keep the newest text in view. */
   onStep?: () => void;
   /** Reveal speed in tokens per second; the same for every reply regardless of length. */
@@ -17,7 +19,7 @@ export interface Reveal {
   /** Stops the animation and shows the complete reply immediately. */
   cancel(): void;
 }
-type Step = { open: Element } | { close: true } | { text: string };
+type Step = { open: Element } | { close: true } | { text: string } | { instant: Element } | { card: Element };
 
 /** Splits text into word-like tokens that keep their trailing whitespace. */
 export const tokenize = (text: string): string[] => text.match(/\S+\s*|\s+/g) ?? [];
@@ -37,6 +39,14 @@ export function revealHTML(target: HTMLElement, html: string, options: RevealOpt
           steps.push({ text: token });
         }
       } else if (child.nodeType === Node.ELEMENT_NODE) {
+        if ((child as Element).matches('.paper')) {
+          steps.push({ card: child as Element });
+          continue;
+        }
+        if (options.instantSelector && (child as Element).matches(options.instantSelector)) {
+          steps.push({ instant: child as Element });
+          continue;
+        }
         steps.push({ open: child as Element });
         plan(child);
         steps.push({ close: true });
@@ -68,7 +78,16 @@ export function revealHTML(target: HTMLElement, html: string, options: RevealOpt
   };
   const apply = (step: Step) => {
     const parent = stack[stack.length - 1];
-    if ('open' in step) {
+    if ('card' in step) {
+      const card = step.card.cloneNode(true) as HTMLElement;
+      card.classList.add('paper-enter');
+      card.addEventListener('animationend', () => card.classList.remove('paper-enter'), { once: true });
+      parent.appendChild(card);
+      current = null;
+    } else if ('instant' in step) {
+      parent.appendChild(step.instant.cloneNode(true));
+      current = null;
+    } else if ('open' in step) {
       const clone = step.open.cloneNode(false);
       parent.appendChild(clone);
       stack.push(clone);
@@ -96,9 +115,11 @@ export function revealHTML(target: HTMLElement, html: string, options: RevealOpt
         const step = steps[index++];
         apply(step);
         if ('text' in step) { budget -= 1; shown += 1; }
+        // Reserve a short beat for each complete card, including adjacent cards.
+        if ('card' in step) { budget -= 12; shown += 12; }
       }
       // Structural steps at the end (closing tags) are free.
-      while (index < steps.length && !('text' in steps[index])) apply(steps[index++]);
+      while (index < steps.length && !('text' in steps[index]) && !('card' in steps[index])) apply(steps[index++]);
       options.onStep?.();
     }
     if (index < steps.length) frame = requestAnimationFrame(run);

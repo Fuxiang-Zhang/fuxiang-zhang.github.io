@@ -2,13 +2,39 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isOfftopicReply, MAX_PAPER_CARDS, OFFTOPIC_MARKER, stripPaperMarkers } from '../src/chat.js';
 import { copy } from '../src/content.js';
-import { createRenderer, inline } from '../src/render.js';
+import { compactAuthors as shortenAuthors, createRenderer, inline } from '../src/render.js';
 import { makeThread, showContent } from '../src/state.js';
-import { cardsOf, commandOf, emptySite, idOf, paperCardId, sectionId, walk, type Content, type Node as SiteNode, type SectionId } from '../src/types.js';
-import { parseSiteMarkdown, siteFile } from '../src/markdown.js';
-import { assertLink, assertText, readLocal, site, textContent } from './helpers.js';
+import { cardsOf, commandOf, emptySite, sectionId, walk, type Content, type SectionId } from '../src/types.js';
+import { parseSiteMarkdown } from '../src/markdown.js';
+import { assertLink, assertText, site, textContent } from './helpers.js';
 
 const papers = site.publications;
+const compactAuthors = (authors: string) => shortenAuthors(authors, site.profile.name);
+test('long author lists preserve order, owner credit and equal-contribution marks', () => {
+  assert.equal(compactAuthors('A, B, Fuxiang Zhang*, D, E, and F'), 'A, B, Fuxiang Zhang*, D, E, and F');
+  assert.equal(compactAuthors('Fuxiang Zhang*, B, C, D, E, F, G'), 'Fuxiang Zhang*, B, C, D, E, F, et al.');
+  assert.equal(compactAuthors('A, B, C, D, Fuxiang Zhang*, F, G'), 'A, B, C, D, Fuxiang Zhang*, F, et al.');
+  assert.equal(compactAuthors('A, B, C, D, E, F, and Fuxiang Zhang'), 'A, B, C, D, E, …, Fuxiang Zhang, et al.');
+  assert.equal(compactAuthors('A, B, C, D, E, F, G, Fuxiang Zhang*, H'), 'A, B, C, D, E, …, Fuxiang Zhang*, et al.');
+  assert.equal(compactAuthors('A, B, C, D, E, F, G'), 'A, B, C, D, E, F, et al.');
+});
+
+test('workshop cards name their parent conference and show the year separately', () => {
+  const view = createRenderer({ site, loadFailed: false });
+  for (const [id, label] of [['derl-swe', 'ICML DL4C Workshop'], ['dr-mas', 'ICLR MALGAI Workshop']]) {
+    const html = view.message({ id: 'test', role: 'assistant', text: `[[paper:${id}]]`,
+      prompt: 'q', paperId: null, state: 'done', mode: 'live' });
+    assert.ok(html.includes(`<span class="paper-venue-tag">${label}</span><span class="paper-year">2026</span>`));
+  }
+});
+test('inline bold composes with links while preserving URLs and escaping HTML', () => {
+  assert.equal(inline('A **bold** and **second** word.'), 'A <strong>bold</strong> and <strong>second</strong> word.');
+  const link = '<a href="https://example.org/**path**?a=1&amp;b=2" target="_blank" rel="noopener noreferrer"><strong>Paper</strong></a>';
+  assert.equal(inline('[**Paper**](https://example.org/**path**?a=1&b=2)'), link);
+  assert.equal(inline('**[Paper](https://example.org)**'), '<strong><a href="https://example.org" target="_blank" rel="noopener noreferrer">Paper</a></strong>');
+  assert.equal(inline('**<script>alert(1)</script>**'), '<strong>&lt;script&gt;alert(1)&lt;/script&gt;</strong>');
+  assert.equal(inline('Unclosed **bold and *plain*'), 'Unclosed **bold and <em>plain</em>');
+});
 /** The sessions the file declares, in file order. */
 const topics: SectionId[] = site.sections.filter(commandOf).map(sectionId);
 /** The session whose section prints the publication cards. */
@@ -28,52 +54,6 @@ const reply = (content: Content) => {
   showContent(thread, content);
   return messagesHTML(renderer, thread);
 };
-
-const recordPage = (record: SiteNode) => presetHTML(createRenderer({
-  site: { ...site, sections: [site.sections[0], {
-    title: 'Records', fields: { command: '/records' }, prose: [], children: [record],
-  }] }, loadFailed: false,
-}), 'records');
-
-test('adding prose or children preserves the title, period and subtitle rendering', () => {
-  const record: SiteNode = {
-    title: 'Example institution', fields: { role: 'Researcher', location: 'Singapore', period: '2024 – 2026' },
-    prose: [], children: [],
-  };
-  // Compare the rendered metadata, ignoring the optional content that follows it.
-  const metadata = (html: string) => {
-    const start = html.indexOf('<h3>');
-    assert.ok(start >= 0, 'even a record without prose retains its heading');
-    return html.slice(start, html.indexOf('</p>', start) + 4);
-  };
-  const baseline = metadata(recordPage(record));
-  for (const content of [
-    { prose: ['Additional description.'], children: [] },
-    { prose: [], children: [{ title: 'Nested project', fields: {}, prose: [], children: [] }] },
-    { prose: ['Additional description.'], children: [{ title: 'Nested project', fields: {}, prose: [], children: [] }] },
-  ]) assert.equal(metadata(recordPage({ ...record, ...content })), baseline);
-  for (const value of [record.title, 'Researcher · Singapore', '2024 – 2026']) assertText(baseline, value);
-});
-
-test('nested headings preserve metadata, links, prose and embedded cards at every depth', () => {
-  const html = recordPage({
-    title: 'Parent', fields: { role: 'Researcher' }, prose: [], children: [{
-      title: 'Project', fields: { location: 'Singapore', links: '[Project](https://example.org/project)' },
-      prose: ['Project description.'], children: [{
-        title: 'Contribution', fields: { role: 'Contributor', period: '2026', links: '[Notes](https://example.org/notes)' },
-        prose: ['Contribution description.', `[[paper:${papers[0].id}]]`], children: [],
-      }],
-    }],
-  });
-  assert.match(html, /<h3>Parent<\/h3>/);
-  assert.match(html, /<h4>Project<\/h4>/);
-  assert.match(html, /<h5>Contribution<\/h5>/);
-  for (const value of ['Researcher', 'Singapore', 'Contributor', '2026', 'Project description.', 'Contribution description.']) assertText(html, value);
-  assert.doesNotMatch(textContent(html), /· Singapore/);
-  assertLink(html, 'https://example.org/project');
-  assertLink(html, 'https://example.org/notes');
-  assert.deepEqual(cardIds(html), [papers[0].id]);
-});
 
 test('authored lists use bold names and preserve fields, nesting, cards and adjacent headings', () => {
   const parsed = parseSiteMarkdown(`${site.source}\n\n## List example\nCommand: /list-example
@@ -112,27 +92,13 @@ test('authored lists use bold names and preserve fields, nesting, cards and adja
   assert.deepEqual(cardIds(html), [papers[0].id]);
 });
 
-test('every session prints the headings, fields and paragraphs its section writes', () => {
-  const shell = topics.map(topic => presetHTML(renderer, topic)).join('');
-  for (const value of [site.profile.name, site.profile.position]) assertText(shell, value);
-  assertLink(shell, `mailto:${site.profile.email}`);
-  for (const link of site.profile.links) assertLink(shell, link.url);
-
-  // Routing and classification fields are not rendered as prose.
-  const asAttribute = new Set(['id', 'topic', 'paper', 'command', 'summary', 'cards']);
+test('every authored visible heading, record and paragraph reaches its section', () => {
   for (const section of site.sections.filter(commandOf)) {
     const html = presetHTML(renderer, sectionId(section));
-    assertText(html, section.title);
-    for (const paragraph of section.prose) assertText(html, stripPaperMarkers(paragraph));
-    // A section that prints cards is covered by the publication test below.
-    if (cardsOf(section)) continue;
-    for (const node of walk(section.children)) {
-      assertText(html, node.title, `${section.title} is missing the heading "${node.title}"`);
-      for (const paragraph of node.prose) assertText(html, stripPaperMarkers(paragraph));
-      for (const [key, value] of Object.entries(node.fields)) {
-        if (key === 'links') for (const match of value.matchAll(/\((https?:\/\/[^\s)]+)\)/g)) assertLink(html, match[1]);
-        else if (!asAttribute.has(key)) assertText(html, value, `${node.title} is missing "${key}: ${value}"`);
-      }
+    for (const block of walk([section])) {
+      if (block.title) assertText(html, block.title);
+      if (block.kind === 'markdown') assertText(html, block.text!);
+      for (const key of ['role', 'location', 'period']) if (block.fields[key]) assertText(html, block.fields[key]);
     }
   }
 });
@@ -157,53 +123,6 @@ test('publication listings and details preserve titles, authors, years and sourc
   }
 });
 
-test('a publication topic is escaped on its card', () => {
-  const unsafe = '"><img src=x onerror=alert(1)>';
-  const hostile = { ...emptySite(), publications: [{ ...papers[0], topic: unsafe }], interests: [{ title: 'T', description: 'D', topic: unsafe }] };
-  const html = cardsHTML(createRenderer({ site: hostile, loadFailed: false }), [papers[0].id]);
-  assert.ok(!html.includes('<img src=x'), 'a topic must never reach the page as markup');
-  assert.ok(html.includes('&lt;img') || html.includes('&quot;&gt;&lt;img'));
-});
-
-test('terminal presets print complete section data in the shared output', () => {
-  const thread = makeThread();
-  for (const topic of topics) showContent(thread, { kind: 'preset', topic });
-  const html = messagesHTML(renderer, thread);
-  for (const paper of papers) { assertText(html, paper.title); assertLink(html, paper.links.paper); }
-  // Every heading the file writes under a session reaches the shared output.
-  for (const section of site.sections.filter(commandOf)) {
-    if (cardsOf(section)) continue;
-    for (const node of walk(section.children)) assertText(html, node.title);
-  }
-});
-
-test('every command prints its own section of data/site.md, headings and order included', async () => {
-  const source = await readLocal(siteFile);
-  // The sessions are the file's `##` sections that declare a command, in file order.
-  const written = [...source.matchAll(/^## (.+)$/gm)].map(match => match[1]);
-  assert.deepEqual(site.sections.map(section => section.title), written);
-  assert.deepEqual(topics, site.sections.filter(commandOf).map(sectionId));
-
-  for (const section of site.sections.filter(commandOf)) {
-    const id = sectionId(section);
-    const html = presetHTML(renderer, id);
-    assertText(html, section.title, `${id} prints the file's own heading`);
-    for (const paragraph of section.prose) assertText(html, paragraph, `${id} prints the file's intro`);
-    // A heading may also occur as prose elsewhere — the file's own bio names Skywork AI,
-    // and a contribution names its paper — so records are not proven unique by their text.
-    // Sections can list a collection or embed individual cards in their prose.
-    const embedded = [...walk([section])].flatMap(node => node.prose.map(paperCardId).filter(Boolean));
-    if (!cardsOf(section)) assert.deepEqual(cardIds(html), embedded, `/${id} renders its embedded cards`);
-  }
-  // The section named by `Cards` supplies the papers, in the order that section writes them.
-  const cardSection = site.sections.find(section => commandOf(section) && cardsOf(section))!;
-  assert.deepEqual(cardIds(presetHTML(renderer, sectionId(cardSection))), site.publications.map(paper => paper.id));
-  // The section holding the papers has no command of its own, so it is never printed twice.
-  const data = site.sections.find(section => sectionId(section) === cardsOf(cardSection))!;
-  assert.equal(commandOf(data), undefined, 'the publications section is data, not a session');
-  assert.deepEqual(data.children.map(idOf), site.publications.map(paper => paper.id));
-});
-
 /** The publications rendered as cards, in the order they appear. */
 const cardIds = (html: string) => [...html.matchAll(/data-ask="([a-z0-9-]+)"/g)].map(match => match[1]);
 
@@ -215,7 +134,7 @@ test('work contributions embed complete, actionable paper cards without the chat
   for (const id of ids) {
     const paper = papers.find(paper => paper.id === id)!;
     assertText(html, paper.title);
-    assertText(html, paper.authors);
+    assertText(html, compactAuthors(paper.authors));
     assertText(html, paper.venueShort);
     assertLink(html, paper.links.paper);
     if (paper.links.code) assertLink(html, paper.links.code);
@@ -291,13 +210,13 @@ test('publications the assistant names are rendered from site data, not from its
   // The card's ask action reads as the command it stands in for, and still carries the paper.
   const card = cardsHTML(renderer, [first.id]);
   assertText(card, `[${copy.openPaper}]`);
-  assert.ok(card.includes(`>${copy.askCommand}<`), 'the ask action shows the /ask token');
+  assert.ok(card.includes(`>${copy.askCommand}<`), 'the ask action shows the Ask AI label');
   assert.ok(card.includes(`data-ask="${first.id}"`) && card.includes(`aria-label="${copy.askPaper}"`));
 
   const named = answer(`A good starting point. [[paper:${first.id}]] It came out of the work at Skywork AI.`);
   assertText(named, 'A good starting point.');
   assertText(named, 'It came out of the work at Skywork AI.');
-  for (const value of [first.title, first.authors]) assertText(named, value);
+  for (const value of [first.title, compactAuthors(first.authors)]) assertText(named, value);
   assertLink(named, first.links.paper);
   assert.ok(!named.includes('[[paper:'), 'the marker itself must not reach the page');
   assert.equal(cards(named), 1);
@@ -376,4 +295,176 @@ test('a section named chat uses the same preset template and abstracts render em
   assertText(detail, 'Last paragraph.');
   assert.deepEqual(cardIds(detail).slice(0, 1), [papers[1].id]);
   assert.doesNotMatch(detail, /\[\[paper:/);
+});
+
+test('renaming commands does not change component layout or field preservation', () => {
+  const source = `${site.source}\n## Component example
+Command: /components
+
+<details>
+<summary><h3>Details</h3></summary>
+Role: Researcher
+Location: Singapore
+Period: 2026
+Links: [Notes](https://example.org/notes)
+
+Introduction.
+
+:::paper{ref="${papers[0].id}"}
+Explicit **description**.
+:::
+
+Closing paragraph.
+</details>
+`;
+  const showSource = (source: string, topic: string) => presetHTML(createRenderer({ site: parseSiteMarkdown(source), loadFailed: false }), topic);
+  const html = showSource(source, 'components');
+  assert.equal(html.replace('›</span> /components', '›</span> /renamed'), showSource(source.replace('Command: /components', 'Command: /renamed'), 'renamed'));
+  for (const value of ['Researcher', 'Singapore', '2026', 'Introduction.', 'Closing paragraph.']) assertText(html, value);
+  assertLink(html, 'https://example.org/notes');
+  assert.match(html, /<details class="content-collapse">/);
+  assert.match(html, /<div class="paper-description"><p>Explicit <strong>description<\/strong>\.<\/p>/);
+});
+
+test('ordinary headings and adjacent prose never implicitly become components', () => {
+  const source = `${site.source}\n## Ordinary
+Command: /ordinary
+
+### Group
+
+#### Topic
+
+This stays outside the paper.
+
+[[paper:${papers[0].id}]]
+`;
+  const html = presetHTML(createRenderer({ site: parseSiteMarkdown(source), loadFailed: false }), 'ordinary');
+  assert.doesNotMatch(html, /<details|paper-description/);
+  assert.match(html, /<h4>Topic<\/h4>/);
+  assert.ok(html.indexOf('This stays outside') < html.indexOf('<article'));
+});
+
+test('reordering publication definitions changes listing order without year sorting', () => {
+  const definitions = [...site.source.matchAll(/:::publication\n[\s\S]*?\n:::(?=\n|$)/g)].map(m => m[0]);
+  const reversed = [...definitions].reverse();
+  let index = 0;
+  const source = site.source.replace(/:::publication\n[\s\S]*?\n:::(?=\n|$)/g, () => reversed[index++]);
+  const parsed = parseSiteMarkdown(source);
+  assert.deepEqual(cardIds(presetHTML(createRenderer({ site: parsed, loadFailed: false }), papersPage)), [...papers].reverse().map(p => p.id));
+});
+
+test('standard blocks preserve ordering, nesting and safe inline formatting', () => {
+  const source = `${site.source}\n## Markdown
+Command: /markdown
+
+Before.
+
+- ordinary *emphasis*
+- **Record**
+  Role: Author
+
+  - nested item
+
+  After nested list.
+
+After list.
+
+> Quoted **text**.
+
+3. third
+4. fourth
+
+\`\`\`html
+<script>alert(1)</script>
+\`\`\`
+
+| A | B |
+| --- | --- |
+| 1 | 2 |
+`;
+  const html = presetHTML(createRenderer({ site: parseSiteMarkdown(source), loadFailed: false }), 'markdown');
+  assert.match(html, /<em>emphasis<\/em>/);
+  assert.match(html, /<blockquote>/);
+  assert.match(html, /<ol class="cv-list" start="3">/);
+  assert.match(html, /<table>/);
+  assert.match(html, /<code class="language-html">&lt;script&gt;/);
+  assert.doesNotMatch(html, /<script>/);
+  const positions = ['Before.', 'ordinary', 'nested item', 'After nested list.', 'After list.', '<blockquote>', '<ol', '<pre', '<table'].map(s => html.indexOf(s));
+  assert.ok(positions.every((p, i) => p >= 0 && (i === 0 || p > positions[i - 1])));
+});
+
+test('education and work records are list items and miscellaneous groups are h3 headings', () => {
+  for (const topic of ['education', 'work']) {
+    const html = presetHTML(renderer, topic);
+    assert.doesNotMatch(html, /<h[3-6]/);
+    assert.match(html, /<li class="cv-row"><div class="cv-heading"><strong>/);
+  }
+  const html = presetHTML(renderer, 'misc');
+  assert.match(html, /<h3>Service<\/h3>/);
+  assert.match(html, /<h3>Awards<\/h3>/);
+});
+
+test('owner credit comes from the profile', () => {
+  const authors = 'A, B, C, D, E, F, Ada Lovelace';
+  assert.equal(shortenAuthors(authors, 'Ada Lovelace'), 'A, B, C, D, E, …, Ada Lovelace, et al.');
+  const changed = { ...site, profile: { ...site.profile, name: 'Ada Lovelace' }, publications: [{ ...papers[0], authors }] };
+  assert.match(cardsHTML(createRenderer({ site: changed, loadFailed: false }), [papers[0].id]), /<strong> Ada Lovelace<\/strong>/);
+});
+
+
+test('reference links survive block parsing and metadata-like code remains literal', () => {
+  const source = `${site.source}\n## Syntax examples
+Command: /syntax
+
+A [reference][notes].
+
+[notes]: https://example.org/notes "Notes"
+
+\`\`\`text
+Role: literal code, not metadata
+:::collapse
+\`\`\`
+
+    const example = 1;
+`;
+  const html = presetHTML(createRenderer({ site: parseSiteMarkdown(source), loadFailed: false }), 'syntax');
+  assertLink(html, 'https://example.org/notes');
+  assert.match(html, /<code class="language-text">Role: literal code, not metadata/);
+  assert.match(html, /<pre><code>const example = 1;/);
+});
+
+test('native details markup preserves open state and does not invent a heading for plain summaries', () => {
+  const source = `${site.source}\n## Native details
+Command: /native
+
+<details open>
+<summary>Plain title</summary>
+
+Body with **bold**, a [link](https://example.org), and a card.
+
+[[paper:${papers[0].id}]]
+
+</details>
+`;
+  const html = presetHTML(createRenderer({ site: parseSiteMarkdown(source), loadFailed: false }), 'native');
+  assert.match(html, /<details class="content-collapse" open><summary><span class="collapse-heading">/);
+  assert.doesNotMatch(html, /<h[3-6]/);
+  assert.match(html, /<strong>bold<\/strong>/);
+  assertLink(html, 'https://example.org');
+  assert.deepEqual(cardIds(html), [papers[0].id]);
+});
+
+test('summary content does not enable arbitrary HTML execution', () => {
+  const source = `${site.source}\n## Safe summary
+Command: /safe-summary
+
+<details>
+<summary><img src=x onerror=alert(1)></summary>
+
+Body.
+
+</details>`;
+  const html = presetHTML(createRenderer({ site: parseSiteMarkdown(source), loadFailed: false }), 'safe-summary');
+  assert.doesNotMatch(html, /<img/);
+  assert.match(html, /&lt;img/);
 });

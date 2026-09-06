@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,6 +55,9 @@ export function createServer(publicRoot = root) {
     try { pathname = decodeURIComponent(new URL(req.url || '/', 'http://localhost').pathname); }
     catch { return json(res, 400, { error: 'Invalid URL.' }); }
     if (pathname === '/api/chat') {
+      const controller = new AbortController();
+      const disconnect = () => { if (!res.writableFinished) controller.abort(); };
+      res.on('close', disconnect);
       try {
         const chunks: Buffer[] = [];
         let size = 0;
@@ -67,12 +72,19 @@ export function createServer(publicRoot = root) {
           if (typeof value === 'string') headers.set(name, value);
         }
         const request = new Request(`http://${req.headers.host ?? 'localhost'}${req.url ?? '/api/chat'}`, {
-          method: req.method, headers, body: ['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? '') ? undefined : body,
+          signal: controller.signal, method: req.method, headers, body: ['GET', 'HEAD', 'OPTIONS'].includes(req.method ?? '') ? undefined : body,
         });
         const response = await handleChat(request, await chatEnv(req.headers.host));
         res.writeHead(response.status, Object.fromEntries(response.headers));
-        return res.end(Buffer.from(await response.arrayBuffer()));
-      } catch { return json(res, 503, { error: 'The assistant is unavailable right now.' }); }
+        res.flushHeaders();
+        if (response.body) await pipeline(Readable.fromWeb(response.body as import('node:stream/web').ReadableStream<Uint8Array>), res);
+        else res.end();
+        return;
+      } catch {
+        if (res.headersSent || res.destroyed) res.destroy();
+        else json(res, 503, { error: 'The assistant is unavailable right now.' });
+        return;
+      } finally { res.off('close', disconnect); }
     }
     if (!['GET', 'HEAD'].includes(req.method || '')) return json(res, 405, { error: 'Method not allowed.' });
     try {

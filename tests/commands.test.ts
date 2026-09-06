@@ -52,6 +52,15 @@ test('legacy publication hashes, actual ids, paper details and skip links resolv
   const changed = { ...site, sections: site.sections.map(section => section.fields.command === '/papers'
     ? { ...section, fields: { ...section.fields, id: 'library' } } : section) };
   assert.deepEqual(resolveRoute('#publications', changed), { kind: 'preset', topic: 'library' });
-  const actual = { ...site, sections: [...site.sections, { title: 'Actual', fields: { command: '/publication' }, prose: [], children: [] }] };
+  const actual = { ...site, sections: [...site.sections, { title: 'Actual', fields: { command: '/publication' }, kind: 'heading' as const, level: 2, line: 1, body: [] }] };
   assert.deepEqual(resolveRoute('#publication', actual), { kind: 'preset', topic: 'publication' });
+});
+
+
+test('Home chooses the initial route independently of section order', async () => {
+  const { resolveRoute } = await import('../src/commands.js');
+  const reordered = { ...site, sections: [...site.sections].reverse() };
+  assert.deepEqual(resolveRoute('', reordered), { kind: 'preset', topic: site.profile.home });
+  const changed = { ...reordered, profile: { ...site.profile, home: 'education' } };
+  assert.deepEqual(resolveRoute('', changed), { kind: 'preset', topic: 'education' });
 });

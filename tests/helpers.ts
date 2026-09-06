@@ -20,7 +20,7 @@ export const textContent = (html: string) => normalize(decode(html
   .replace(/<[^>]*>/g, '')));
 
 export function assertText(html: string, source: string, message?: string) {
-  const expected = normalize(source.replace(/\[([^\]]+)\]\(https?:\/\/[^\s)]+\)/g, '$1'));
+  const expected = normalize(source.replace(/\[([^\]]+)\]\((?:https?:\/\/|#)[^\s)]+\)/g, '$1').replace(/\*\*(\S(?:[\s\S]*?\S)?)\*\*/g, '$1'));
   assert.ok(textContent(html).includes(expected), message ?? `Missing or changed content: ${expected}`);
   for (const match of source.matchAll(/\[[^\]]+\]\((https?:\/\/[^\s)]+)\)/g)) assertLink(html, match[1]);
 }

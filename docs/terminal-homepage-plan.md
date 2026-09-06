@@ -4,7 +4,7 @@ Implementation details and the current data grammar are maintained in [README.md
 
 ## Direction
 
-Following the latest review, the typography and layout reference is <https://jiangyy.github.io/>, using the same self-hosted Maple Mono monospace font. The page uses a column of about 140 characters, one font size and line height, plain-text links, and an in-app `›` prompt. The avatar area, sidebar, Sessions, and permanent section navigation are removed. Publication cards remain in the terminal output. Light theme by default, with a dark theme toggle.
+Following the latest review, the typography and layout reference is <https://jiangyy.github.io/>, using the same self-hosted Maple Mono monospace font. The page uses a column of about 140 characters, a shared body font size and line height with distinct heading levels, plain-text links, and an in-app `›` prompt. The avatar area, sidebar, Sessions, and permanent section navigation are removed. Publication cards remain in the terminal output. Light theme by default, with a dark theme toggle.
 
 The Bio shows `FUXIANG ZHANG` spelled out in `█` block characters: words side by side on wide screens, one word per line on narrow screens. A normal text heading with the name stays in place for screen readers, and the banner is generated from `profile.name`, so there is no second copy of the name.
 
@@ -14,7 +14,7 @@ The whole page is one continuous terminal transcript. The clickable commands in 
 
 | Command | Output |
 | --- | --- |
-| `/bio` | Name banner, position, contact links, biography, and the command row |
+| `/bio` | Name banner, position, contact links, biography, and authored navigation links |
 | `/research` | Full research directions |
 | `/papers` | Full publication list; clicking a title appends its details |
 | `/work` | Work history |
@@ -23,6 +23,10 @@ The whole page is one continuous terminal transcript. The clickable commands in 
 | `/help` | Clickable command reference |
 
 Typing `/` shows candidates; Up/Down select, Tab completes, Enter runs, Escape closes. Plain text is sent to the chat backend (a Cloudflare Worker calling the OpenAI Responses API; see "Chat backend" in the README) and, when no backend is configured, answered with a labelled mock reply; either way the reply is appended to the same transcript. Asking about a paper sets the paper as input context. The prompt is fixed at the bottom, highlighted with a background and shadow, while the transcript scrolls independently above it. The title bar reads `Fuxiang Zhang - Homepage`. Typing or pasting anywhere outside an editable region goes into the prompt; text selection, copying, browser shortcuts, and keyboard navigation are preserved. On desktop, clicking ordinary text returns focus to the prompt; on phones, tapping the input still opens the keyboard. Legacy section hashes and `#paper/<id>` open the matching content directly.
+
+## Markdown structure
+
+Markdown owns content order, hierarchy and component boundaries. Education and Work are list records; Service, Awards and research groups are actual headings. Collapses use GitHub-style `<details>` / `<summary>` markup; publication definitions and card descriptions use explicit fenced components. `Home` selects the landing section, and `:::profile` places its profile header. See the README for the current syntax and validation rules.
 
 ## Files
 

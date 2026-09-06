@@ -6,14 +6,17 @@
  *                   homepage can warn visitors before they ask.
  */
 import { mockReply } from '../src/chat.js';
-import { MAX_MESSAGE, MAX_REPLY, MAX_HISTORY, MAX_HISTORY_CHARS, MAX_BODY, isRecord, type ChatReply, type ChatRequest, type ChatStatus, type ChatTurn, type SiteData } from '../src/types.js';
-import { budgetStatus, checkClientLimit, emptyUsage, readUsage, recordUsage, secondsUntilReset, type CounterStore } from './limits.js';
+import { MAX_MESSAGE, MAX_REPLY, MAX_HISTORY, MAX_HISTORY_CHARS, MAX_BODY, isRecord, type ChatReply, type ChatStreamEvent, type ChatRequest, type ChatStatus, type ChatTurn, type SiteData } from '../src/types.js';
+import { budgetStatus, checkClientLimit, readUsage, recordUsage, secondsUntilReset, type CounterStore, type Usage } from './limits.js';
 import { sectionIds } from '../src/commands.js';
-import { askModel, ModelReplyError, type ModelReply } from './openai.js';
+import { askModel, ModelReplyError } from './openai.js';
 import { buildInstructions } from './prompt.js';
+import { chatDeadline } from '../src/chat-deadline.js';
 
 export interface ChatEnv {
   site: SiteData;
+  /** Keep final accounting alive if the visitor disconnects in a Worker. */
+  waitUntil?: (task: Promise<void>) => void;
   /** OpenAI API key; when absent every reply is the mock. */
   openaiKey?: string;
   model?: string;
@@ -116,18 +119,68 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
 
   const paper = parsed.paperId && env.site.publications.some(paper => paper.id === parsed.paperId) ? parsed.paperId : null;
   const turns: ChatTurn[] = [...(parsed.history ?? []), { role: 'user', text: parsed.message }];
-  let reply: ModelReply;
-  try {
-    reply = await askModel({ apiKey: env.openaiKey, model: env.model, instructions: buildInstructions(env.site, paper), turns, signal: request.signal });
-  } catch (error) {
-    console.error('chat: model request failed:', error instanceof Error ? error.message : error);
-    if (env.store) await recordUsage(env.store, { errors: 1, ...(error instanceof ModelReplyError ? error.usage : {}) }, now);
-    return json(502, { error: 'The assistant is unavailable right now. Please try again in a moment.' }, cors);
+  const cancellation = new AbortController();
+  const deadline = chatDeadline(AbortSignal.any([request.signal, cancellation.signal]));
+  const encoder = new TextEncoder();
+  let closed = false;
+  const bodyStream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (event: ChatStreamEvent) => {
+        if (!closed) controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+      };
+      const task = (async () => {
+        try {
+          const reply = await askModel({
+            apiKey: env.openaiKey!, model: env.model, instructions: buildInstructions(env.site, paper), turns,
+            signal: deadline.signal, onDelta: text => send({ type: 'delta', text }),
+          });
+          const usage = await accountUsage(env, { requests: 1, ...reply.usage }, now, reply.id);
+          const response: ChatReply = {
+            id: reply.id, text: reply.answer, mode: 'live',
+            ...(budget && usage ? { budget: budgetStatus(usage, budget.limit, now) } : {}),
+          };
+          send({ type: 'done', reply: response });
+        } catch (error) {
+          const aborted = deadline.signal.aborted;
+          console.error('chat: model request failed:', {
+            kind: aborted ? deadline.signal.reason?.name : error instanceof ModelReplyError ? 'model_reply' : 'upstream',
+            message: error instanceof Error ? error.message : String(error),
+          });
+          await accountUsage(env, { errors: 1, ...(error instanceof ModelReplyError ? error.usage : {}) }, now);
+          send({ type: 'error', status: 502, error: aborted && deadline.signal.reason?.name === 'TimeoutError'
+            ? 'The answer timed out. Please try again.'
+            : 'The assistant is unavailable right now. Please try again in a moment.' });
+        } finally {
+          deadline.dispose();
+          if (!closed) { closed = true; controller.close(); }
+        }
+      })();
+      env.waitUntil?.(task);
+      // start must return immediately so the response headers and deltas can flow.
+      void task;
+    },
+    cancel() {
+      closed = true;
+      cancellation.abort();
+    },
+  });
+  return new Response(bodyStream, { headers: {
+    ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-store, no-transform', 'X-Content-Type-Options': 'nosniff',
+  } });
+}
+
+/** A ledger write failure must not discard a generated answer or mask the model error.
+ * Do not retry a non-idempotent increment: the store may already have committed it.
+ */
+async function accountUsage(env: ChatEnv, delta: Partial<Usage>, now: number, responseId?: string): Promise<Usage | null> {
+  if (!env.store) return null;
+  try { return await recordUsage(env.store, delta, now); }
+  catch (error) {
+    console.error('chat: usage accounting failed:', {
+      responseId, day: new Date(now).toISOString().slice(0, 10), delta,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
-  const usage = env.store ? await recordUsage(env.store, { requests: 1, ...reply.usage }, now) : emptyUsage();
-  const response: ChatReply = {
-    id: reply.id, text: reply.answer, mode: 'live',
-    ...(budget ? { budget: budgetStatus(usage, budget.limit, now) } : {}),
-  };
-  return json(200, response, cors);
 }

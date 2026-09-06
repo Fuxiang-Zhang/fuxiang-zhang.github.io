@@ -1,3 +1,4 @@
+import { chatDeadline } from './chat-deadline.js';
 import { MAX_REPLY } from './types.js';
 import { isRecord, type BudgetStatus, type ChatRequest, type ChatReply, type ChatStatus } from './types.js';
 
@@ -117,26 +118,79 @@ export function parseChatReply(data: unknown): ChatReply {
 }
 
 export async function requestReply(
-  { signal, ...request }: ChatRequest & { signal?: AbortSignal },
+  { signal, onDelta, ...request }: ChatRequest & { signal?: AbortSignal; onDelta?: (text: string) => void },
   endpoint: string | null = null,
 ): Promise<ChatReply> {
   signal?.throwIfAborted();
   if (!endpoint) return mockReply();
-  const response = await fetch(endpoint, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request), signal,
-  });
-  if (!response.ok) {
-    let detail = '';
-    let budget: BudgetStatus | null = null;
-    try {
-      const data: unknown = await response.json();
-      if (isRecord(data) && typeof data.error === 'string') detail = data.error.slice(0, 300);
-      if (isRecord(data)) budget = parseBudget(data.budget);
-    } catch { /* Non-JSON error bodies fall back to the status text. */ }
-    throw new ChatError(detail || `Chat request failed (${response.status}).`, response.status, budget);
+  const deadline = chatDeadline(signal);
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request), signal: deadline.signal,
+    });
+    if (!response.ok) {
+      let detail = '';
+      let budget: BudgetStatus | null = null;
+      try {
+        const data: unknown = await response.json();
+        if (isRecord(data) && typeof data.error === 'string') detail = data.error.slice(0, 300);
+        if (isRecord(data)) budget = parseBudget(data.budget);
+      } catch { /* Non-JSON error bodies fall back to the status text. */ }
+      throw new ChatError(detail || `Chat request failed (${response.status}).`, response.status, budget);
+    }
+    if (response.headers.get('Content-Type')?.includes('application/x-ndjson')) {
+      return await readChatStream(response, onDelta);
+    }
+    return parseChatReply(await response.json());
+  } catch (error) {
+    if (deadline.signal.aborted && deadline.signal.reason?.name === 'TimeoutError') {
+      throw new ChatError('The answer timed out. Please try again.', 502);
+    }
+    throw error;
+  } finally { deadline.dispose(); }
+}
+
+/** Read complete JSON lines across arbitrary network and UTF-8 chunk boundaries. */
+export async function readChatStream(response: Response, onDelta?: (text: string) => void): Promise<ChatReply> {
+  if (!response.body) throw new Error('Chat response has no body.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let length = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      let newline: number;
+      while ((newline = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, newline).trim();
+        buffer = buffer.slice(newline + 1);
+        if (!line) continue;
+        const event: unknown = JSON.parse(line);
+        if (!isRecord(event)) throw new Error('Invalid chat stream event.');
+        if (event.type === 'delta' && typeof event.text === 'string') {
+          length += event.text.length;
+          if (length > MAX_REPLY) throw new Error('Chat reply is too long.');
+          onDelta?.(event.text);
+        } else if (event.type === 'done') {
+          return parseChatReply(event.reply);
+        } else if (event.type === 'error' && typeof event.error === 'string' && typeof event.status === 'number') {
+          throw new ChatError(event.error.slice(0, 300), event.status);
+        } else throw new Error('Invalid chat stream event.');
+      }
+      if (buffer.length > MAX_REPLY * 6 + 4096) throw new Error('Chat stream event is too large.');
+      if (done) throw new Error('Chat stream ended before the answer was complete.');
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
-  return parseChatReply(await response.json());
+}
+
+/** Hold incomplete protocol markers until the next delta arrives. */
+export function streamingReplyText(text: string): string {
+  return text.replace(/\[\[[^\]\n]*\]?$/, '').replace(/\[$/, '');
 }
 
 /** Asks the backend what to expect before the first question: reply mode and today's budget. */

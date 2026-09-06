@@ -25,13 +25,14 @@ interface WorkerEnv {
 const site = parseSiteMarkdown(siteMarkdown);
 
 export default {
-  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+  async fetch(request: Request, env: WorkerEnv, ctx: { waitUntil(task: Promise<void>): void }): Promise<Response> {
     const { pathname } = new URL(request.url);
     if (pathname !== '/api/chat') {
       return new Response(JSON.stringify({ error: 'Not found.' }), { status: 404, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
     }
     return handleChat(request, {
       site,
+      waitUntil: task => ctx.waitUntil(task),
       openaiKey: env.OPENAI_API_KEY,
       model: env.OPENAI_MODEL,
       allowedOrigins: (env.ALLOWED_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(Boolean),

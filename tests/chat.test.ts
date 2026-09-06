@@ -4,7 +4,7 @@ import { BUDGET_MESSAGE, handleChat, parseChatRequest, type ChatEnv } from '../c
 import { MemoryStore, checkClientLimit, readUsage, recordUsage, budgetStatus, usageKey, secondsUntilReset } from '../chat/limits.js';
 import { parseModelReply } from '../chat/openai.js';
 import { buildInstructions } from '../chat/prompt.js';
-import { parseBudget, parseChatReply } from '../src/chat.js';
+import { parseBudget, parseChatReply, readChatStream } from '../src/chat.js';
 import type { ChatStatus } from '../src/types.js';
 import { site } from './helpers.js';
 
@@ -125,7 +125,9 @@ test('the model instructions carry every publication and the paper the visitor o
   assert.ok(instructions.includes(site.profile.name));
   for (const paper of site.publications) assert.ok(instructions.includes(paper.title), paper.title);
   assert.ok(instructions.includes('# Current focus'));
-  assert.ok(instructions.indexOf('# Current focus') > instructions.indexOf('## Awards'), 'per-request focus stays after the cacheable content');
+  assert.ok(instructions.startsWith(buildInstructions(site)), 'per-request focus preserves the complete stable prefix');
+  assert.ok(instructions.includes(site.source), 'homepage Markdown is supplied verbatim');
+  assert.ok(instructions.includes('An explicit question about a different paper or topic takes precedence.'));
   assert.ok(!buildInstructions(site).includes('# Current focus'));
   assert.ok(!buildInstructions(site, 'no-such-paper').includes('# Current focus'));
 });
@@ -169,19 +171,22 @@ test('provider usage is recorded once for successful, incomplete, refused and em
   let calls = 0;
   t.mock.method(globalThis, 'fetch', async () => {
     calls++;
-    return Response.json({
+    const response = {
       id: 'resp_test', object: 'response', status: mode === 'incomplete' ? 'incomplete' : 'completed',
       incomplete_details: mode === 'incomplete' ? { reason: 'max_output_tokens' } : null,
       output: [{ type: 'message', role: 'assistant', content: mode === 'refused'
         ? [{ type: 'refusal', refusal: 'Unavailable' }]
         : [{ type: 'output_text', text: mode === 'empty' ? '' : 'A complete answer.', annotations: [] }] }],
       usage: { input_tokens: 100, input_tokens_details: { cached_tokens: 40 }, output_tokens: 20, total_tokens: 120 },
-    });
+    };
+    return new Response(`data: ${JSON.stringify({ type: mode === 'incomplete' ? 'response.incomplete' : 'response.completed', response })}\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
   });
   const store = new MemoryStore();
   for (mode of ['completed', 'incomplete', 'refused', 'empty']) {
     const response = await handleChat(post({ message: 'question' }), env({ store, openaiKey: 'fake-test-key' }));
-    assert.equal(response.status, mode === 'completed' ? 200 : 502, mode);
+    assert.equal(response.status, 200);
+    if (mode === 'completed') assert.equal((await readChatStream(response)).text, 'A complete answer.');
+    else await assert.rejects(readChatStream(response), /unavailable/);
   }
   assert.equal(calls, 4);
   assert.deepEqual(await readUsage(store), { requests: 1, errors: 3, input: 400, cached: 160, output: 80, total: 480 });

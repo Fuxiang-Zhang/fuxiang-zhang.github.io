@@ -1,6 +1,6 @@
 # Fuxiang’s research homepage
 
-A terminal-style personal research homepage. The frontend is a static page written in TypeScript and hosted on GitHub Pages. The chat assistant on the page is served by a Cloudflare Worker backend that calls an OpenAI GPT model and answers only from the homepage content in `data/site.md`. No frontend framework; the browser runs compiled, plain JavaScript.
+A terminal-style personal research homepage. The frontend is a static page written in TypeScript and hosted on GitHub Pages. The chat assistant on the page is served by a Cloudflare Worker backend that calls an OpenAI GPT model and answers only from the homepage content in `data/site.md`. No frontend framework; the browser runs one bundled JavaScript module.
 
 ## Contents
 
@@ -85,54 +85,25 @@ Billing is authoritative on the OpenAI Usage page; the Cloudflare dashboard's Wo
 
 ### Commands on the page
 
-The command list comes from `data/site.md`; only built-in routes and legacy aliases are named in code. Every `##` under the title is a section; one that declares a `Command` is a preset with a route, and the page reads them in file order:
+Every visible `##` section declares a `Command`; `/help` is built in. Commands and their descriptions are derived from Markdown in file order. A section's route is its `Id`, or its command without the slash. `Home` in the profile explicitly chooses the opening section. Command names never select templates or styles.
 
-```markdown
-## Papers
-Command: /papers
-Summary: Print publications, code, and paper details
-Cards: publications
-
-All of my publications, technical reports first, then conference and journal papers.
-```
-
-A section's id — its route hash and the name other sections refer to it by — is its command without the slash, so `## Papers` above is reached at `#papers`. Write an `Id` field only where that is not enough: a section with no command needs one (nothing else names it), and a publication needs one because `#paper/rear` and `[[paper:rear]]` address it. Adding one elsewhere pins the route while the command is free to change. An id is lowercase letters, digits and hyphens.
-
-| Command | Section | Output |
-| --- | --- | --- |
-| `/bio` | `## Bio` | Biography and contact links; the first section is the opening screen and carries the profile header |
-| `/research` | `## Research` | Research interests and directions |
-| `/papers` | `## Papers` | Publication cards, from the section its `Cards` field names |
-| `/work` | `## Work` | Research and industry experience |
-| `/education` | `## Education` | Degrees and institutions |
-| `/misc` | `## Miscellaneous` | Its `### Service` and `### Awards`, printed one heading level down |
-| `/help` | — | Clickable command help; the one command the page provides itself |
-
-A command prints its section and nothing else: the heading, the prose under it, then its records in file order. Adding a `## Talks` with a `Command` adds a command and a route with no code change; renaming a heading or a command changes nothing else. `buildCommands` (`src/commands.ts`) derives the list and a test in `tests/render.test.ts` pins the correspondence.
-
-**Headings and list items share one template** (`renderNode` in `src/render.ts`). Use headings for sections, companies and schools; use `- **Name**` for individual projects, service and awards:
-
-| Content | Rendering |
+| Command | Content |
 | --- | --- |
-| Heading or list item name, and optional `Period` | Name on the left, period on the right; list names are bold with a bullet, without a heading prefix |
-| `Role` and `Location` | Optional subtitle below the title, joined with ` · ` |
-| Prose | Paragraphs and embedded publication cards below the subtitle |
-| `Links` | Links below the prose |
-| Child headings or list items | The same template recursively; headings follow heading depth, lists follow indentation |
+| `/bio` | Profile component, biography and authored navigation links |
+| `/research` | Research headings, explicitly declared collapses and paper references |
+| `/papers` | Publication cards, in the source's written order |
+| `/work` | Employer records with nested project lists |
+| `/education` | Education records as list items |
+| `/misc` | Service and Awards as third-level headings, each followed by a list |
+| `/help` | Generated command help |
 
-Missing fields are omitted. The written heading or list syntax selects the outer element; adding or removing prose or children does not change the layout of existing fields. Work, Education, Service, Awards and research headings follow the same rules. Publication collections selected by `Cards` and embedded `[[paper:id]]` markers use the publication card template.
-
-To embed a publication card in a section or contribution, write `[[paper:skyreels-v4]]` as a separate paragraph, with blank lines around it. The card uses the publication's title, authors, venue, year and links, with the same detail and ask actions as the papers list. Authored content has no three-card limit. `Paper` fields only hold HTTP(S) URLs; they never link a contribution title to a publication.
-
-**Publications are declared, not guessed.** A section whose records are papers carries no `Command` — it is data the file keeps but never prints on its own — and the section that shows them names it in `Cards`. So `## Publications` holds the records and `## Papers` renders them, and the parser never has to infer from a record's fields whether it is a paper. A section with neither a `Command` nor a referenced data `Id` is rejected.
-
-Typing `/` shows candidates; Up/Down select, Tab completes, Enter runs, Escape closes. Shift+Enter inserts a newline. Text that does not start with `/` is sent to the chat backend as a question.
+Typing `/` shows candidates; Up/Down select, Tab completes, Enter runs, Escape closes. Shift+Enter inserts a newline. Other text asks the assistant a question. Existing paper ids and legacy route aliases remain supported.
 
 ## Frontend design
 
-The homepage is one continuous terminal transcript set in the self-hosted Maple Mono monospace font. The content column is 140 characters wide, light by default with a dark theme toggle. The opening screen shows a banner spelled out in block characters from the name, the position, the biography, the links, a row of clickable commands under the biography, and the input hint. Command output and chat replies are appended to the end of the same transcript; earlier output stays until the page is reloaded. Only the theme preference is stored on the device.
+The homepage is one continuous terminal transcript set in the self-hosted Maple Mono monospace font. The content column is 140 characters wide, light by default with a dark theme toggle. The opening screen shows a banner spelled out in block characters from the name, the position, the biography, the links, authored navigation links under the biography, and the input hint. Command output and chat replies are appended to the end of the same transcript; earlier output stays until the page is reloaded. Only the theme preference is stored on the device.
 
-- **Progressive output.** Command output and chat replies share one word-by-word writer (`src/stream.ts`) at a fixed 40 words per second, paced by elapsed time so the speed is independent of frame rate and text length. The page follows the newest text while writing; scrolling up stops following. The opening screen appears at once. Appending output preserves existing DOM nodes and animations.
+- **Progressive output.** Live chat text appears as network deltas arrive. Command output and mock replies use a word-by-word writer (`src/stream.ts`) at a fixed 40 words per second, paced by elapsed time so the speed is independent of frame rate and text length. The page follows the newest text while writing; scrolling up stops following. The opening screen appears at once. Appending output preserves existing DOM nodes and animations.
 - **Input.** Typing or pasting anywhere outside an editable region goes into the prompt. Text selection, copying, browser shortcuts, and IME composition keep their native behavior.
 - **Chat.** Each question carries recent conversation turns and the current paper context. History is bounded to 8 turns and 24,000 characters; user turns allow 2,000 characters and assistant turns 20,000. The oldest turns are dropped when necessary. Replies are labelled "AI reply" or "Simulated reply".
 - **Budget notice.** On load the page asks the backend for its status. When today's token budget is spent, a notice appears above the prompt and questions are held back; commands keep working. The page rechecks automatically at midnight UTC, with a 10-second request timeout and one-minute retries after transient failures.
@@ -140,61 +111,124 @@ The homepage is one continuous terminal transcript set in the self-hosted Maple 
 
 ## Site data
 
-`data/site.md` is the single source of truth, and it is written to be read by people as well as by the code. The frontend fetches it in the browser and the chat backend sends it to the model **verbatim** as the homepage content, so there is no second copy of the facts to keep in sync. `parseSiteMarkdown` (`src/markdown.ts`) turns it into a `SiteData` object; the build validates the structure, unique paper ids, valid paper references, supported field locations, URLs, and unrenderable content; on failure the previous build is kept.
+`data/site.md` is the single source of content and structure. Markdown controls content, order, heading levels and component boundaries. The renderer maps those declarations to HTML. CSS controls appearance; the controller adds interaction and progressive output. The backend receives the original source verbatim.
 
-A record starts with a heading or a list item written as `- **Name**`. The `Key: value` lines directly beneath it are its fields, followed by prose and children. The heading or list name is only a title; everything else about a record, its id included, is a field.
+`src/markdown-engine.ts` configures markdown-it with raw HTML disabled. `src/markdown.ts` turns its parsed blocks into one ordered `Node.body` tree. Paragraphs, lists and components can interleave: text after a nested list remains after that list. Standard Markdown supports ordinary and ordered lists, nesting, links, emphasis, inline code, fenced code, blockquotes and tables. HTTP(S), mailto, hash and explicit relative links are supported; unsafe URL schemes are not rendered as links.
 
-List fields, paragraphs and paper markers are indented two spaces beneath the item. Separate paragraphs and card markers with blank lines. Nested list items add two spaces per level; their fields and prose add another two. Lists belong under a `##` section or a deeper heading. Keep a record's fields and prose before its children; use an unindented heading to start the next group. Publications remain heading records in the section named by `Cards`. Their abstracts can contain standalone paper cards too.
-
-```markdown
-### Skywork AI
-Role: Researcher
-Period: Oct. 2024 – Present
-
-- **SkyReels-V4**
-
-  Worked on data processing pipelines.
-
-  [[paper:skyreels-v4]]
-
-### Awards
-
-- **First-Class Scholarship**
-  Role: Nanjing University
-  Period: 2021 – 2024
-```
-
-A paragraph is written on one line. The parser does join hard-wrapped lines back together, so wrapping will not break anything, but the file is also the prompt the model reads and a newline mid-sentence only costs a token there.
+### Profile and sections
 
 ```markdown
-### REAR: Test-time Preference Realignment through Reward Decomposition
-Id: rear
-Authors: Fuxiang Zhang, Pengcheng Wang, …
-Venue: International Conference on Machine Learning (ICML)
-Venue short: ICML
-Year: 2026
-Topic: Large Language Models
-Paper: https://arxiv.org/abs/2606.30339
-Code: https://github.com/mansicer/REAR
+# Ada Lovelace
+Home: bio
+Title: Ada Lovelace - Homepage
+Description: Research on analytical engines.
+Position: Researcher
+Email: ada@example.org
+Links: [Website](https://example.org)
 
-Aligning large language models (LLMs) with diverse user preferences is a critical yet challenging task. …
+## Bio
+Command: /bio
+Summary: Print biography
+
+:::profile
+:::
+
+Biography text.
+
+[Explore my research](#research), or type [/help](#help).
 ```
 
-A publication's prose is its abstract. It is optional, it is shown on the paper's detail view, and — like everything else in the file — it reaches the assistant verbatim, which is what lets the assistant discuss what a paper actually does instead of only its title and venue.
+`Home` names the Id of a visible section. `Title` is optional and defaults to the name plus ` - Homepage`; `Description`, `Position` and `Email` are required. Build-time HTML metadata, the browser title and the home link all come from these fields. The empty `profile` component explicitly places the name banner, position and contact links. It may be placed wherever it is needed; rearranging sections does not move the home route or inject profile content elsewhere. The social image remains a static asset in `index.html`.
 
-The profile takes `Position`, `Email` and `Links`; its prose belongs in a `##` section. The social preview image remains in `index.html` and is not a Markdown field. Sections take `Id`, `Command`, `Summary` and `Cards`. Ordinary headings and list items take `Period`, `Role`, `Location` and `Links`; publication fields are accepted only in a Cards source. Unsupported fields fail validation instead of disappearing from the page. `/help`, `/paper`, `/main` and those section ids are reserved for built-in behavior.
+Fields occupy consecutive lines directly under their heading, record name or publication opener. After fields, separate body content with a blank line. Unsupported or misplaced metadata is reported. `Id` uses lowercase letters, digits and hyphens; `/help`, `/main` and `/paper` are reserved.
 
-A Cards source contains only its `Id` and publication records. Publication records cannot have child records. A section with `Cards` cannot also have children; several sections may share one source without duplicating publications. A section without a command must be referenced by `Cards`.
+### Headings and records
 
-| Field | Meaning |
-| --- | --- |
-| `Id` | The slug of a section or publication; required on a publication and on a Cards source |
-| `Authors`, `Venue`, `Venue short`, `Year`, `Paper`, `Code` | A publication. `Paper` and `Code` are URLs; the prose is its abstract |
-| `Topic` | Free text label shown on publication cards and details |
-| `Period`, `Role`, `Location` | A CV row; `Role` describes a position, degree, or awarding institution |
-| `Links` | `[label](url)` links shown under the record |
+Use `###` and deeper headings for actual sections. They retain their heading level in HTML and have consistent heading styles. Use lists for schools, employers, projects, services and awards:
 
-Conventions: a `Topic` is free text that a publication defines by using it — a new topic is created simply by naming one, and nothing declares the set up front. `Topic` belongs only to publication records. Text may contain inline links written as `[label](https://…)` and standalone `[[paper:id]]` paragraphs that embed publication cards; other text is escaped, and only http(s) links are allowed. Card markers must name an existing publication and occupy a separate paragraph; malformed markers fail the build. Fields are read only directly under their heading or list item name — a stray field further down is reported rather than silently swallowed. Unknown fields, missing fields, duplicate ids and dangling paper references all fail the build with the heading named. Full types are in `src/types.ts`.
+```markdown
+## Work
+Command: /work
+
+- **Employer**
+  Role: Researcher
+  Location: Singapore
+  Period: 2024 – Present
+  Links: [Website](https://example.org)
+
+  Employer description.
+
+  - **Project**
+
+    Project contribution.
+
+  Text after the project list.
+```
+
+A bold name occupying the first line of a list item starts a record. `Role`, `Location`, `Period` and `Links` are optional metadata for headings and records. The record becomes `li` with a `strong` name, never a heading. Ordinary list items work too. Indent nested lists and their content according to Markdown list indentation. Education uses a list of degrees; Work uses employers with nested projects. Service and Awards remain `###` headings.
+
+### Explicit components
+
+Collapsible sections use GitHub’s native `<details>` / `<summary>` markup. Leave a blank line after the summary and before the closing tag so GitHub can render Markdown inside:
+
+```markdown
+<details>
+<summary><h4>Research direction</h4></summary>
+
+An introductory paragraph.
+
+:::paper{ref="analytical-engines"}
+An explicit description of this contribution, with **emphasis**.
+:::
+
+A closing paragraph, outside the card.
+</details>
+```
+
+- `<details>` starts with `<summary>Title</summary>`; use `<summary><h4>Title</h4></summary>` when the summary is also a heading. Both single-line and multiline summaries are accepted. `<details open>` starts expanded; otherwise each section starts closed and opens independently. Optional metadata immediately after the summary is preserved. Nested details and details in list items are supported. The old `:::collapse` syntax is removed. Arbitrary HTML and attributes are not enabled.
+- `paper{ref="id"}` inserts an existing publication card. Its body is the card description and may contain standard Markdown blocks. Ordinary neighboring paragraphs stay outside the card.
+- A standalone `[[paper:id]]` paragraph inserts a card without a description. Authored cards have no chat-specific three-card limit.
+- `profile` is an empty component for the profile display.
+- `publication` defines a reusable publication in a data section, as below.
+
+Paper, profile and publication components still use `:::` fences; a closing fence must be at least as long as its opener. All components must close explicitly. Unknown components, malformed options and missing references fail validation with a source line. Components belong in ordinary content or list items, outside blockquotes and tables. Code blocks treat component syntax literally. GitHub renders the details/summary structure directly. Paper, profile and publication components remain project-specific extensions: use `npm run dev` for the complete homepage preview.
+
+### Publication definitions and collections
+
+```markdown
+## Papers
+Command: /papers
+Cards: publications
+
+All publications, in the order below.
+
+## Publications
+Id: publications
+
+:::publication
+Title: On Analytical Engines
+Id: analytical-engines
+Authors: Ada Lovelace, Charles Babbage
+Venue: Journal of Computing
+Venue short: JoC
+Year: 1843
+Topic: Computing
+Paper: https://example.org/paper
+Code: https://example.org/code
+
+The abstract goes here.
+:::
+```
+
+A section named by `Cards` is a data source containing only `publication` definitions. Definitions use `Title`, not a heading: they are records, not document sections. All fields above except `Code` and the abstract are required. `Paper` and `Code` must be HTTP(S) URLs. Several commands may reuse one collection without duplicating definitions.
+
+A `Cards` view renders its authored body followed by the referenced collection. Publication definitions appear in their written order; no year sorting occurs in code. Move definitions in Markdown to reorder the collection. Abstracts appear in paper details; cards show compact author credits with the profile owner's name retained and highlighted. Paper details and chat card references continue to use the same ids.
+
+### Build and validation
+
+`npm run build` validates the Markdown, compiles TypeScript, generates HTML metadata and bundles the browser entry with esbuild. Preview and deployment serve the same `dist/` output. The browser and backend share the parser; a failed build keeps the previous export. The terminal body is still rendered in the browser; pre-rendering the body is a separate future enhancement.
+
+Tests cover explicit component boundaries, metadata preservation, source ordering, command renaming, heading/list semantics, standard Markdown, safe rendering, publication details and chat references. Do not add content-specific branches such as `command === '/research'` to the renderer.
 
 ## Chat backend
 
@@ -205,16 +239,28 @@ All backend logic lives in `chat/`. The entry point is `handleChat(request, env)
 | Method | Purpose | Notes |
 | --- | --- | --- |
 | `GET /api/chat` | Status | Returns `{ mode, budget }`. `mode` is `live` or `mock`; `budget` has `used`, `limit`, `exhausted`, `resetsAt`, or is `null` when no key or budget is configured |
-| `POST /api/chat` | Ask | Request `{ message, topic?, paperId?, history? }`, response `{ id, text, mode, budget? }` |
+| `POST /api/chat` | Ask | Request `{ message, topic?, paperId?, history? }`; live replies stream NDJSON, mock replies return `{ id, text, mode, budget? }` |
 | `OPTIONS /api/chat` | Preflight | 204 only for origins in `ALLOWED_ORIGINS` |
 
-Errors come back as `{ error }`: 400 invalid input, 403 origin not allowed, 413 request too large, 415 not JSON, 429 rate limit or budget exhausted (with `Retry-After`), 502 model unavailable, 503 storage/service unavailable. The frontend shows the `error` text of 429, 502 and 503 responses to the visitor as is. Full types are in `src/types.ts`.
+Before streaming starts, errors come back as `{ error }`: 400 invalid input, 403 origin not allowed, 413 request too large, 415 not JSON, 429 rate limit or budget exhausted (with `Retry-After`), 503 storage/service unavailable. After streaming starts (HTTP 200), model failures are delivered as an `error` event with status 502. The frontend shows the `error` text of 429, 502 and 503 responses to the visitor as is. Full types are in `src/types.ts`.
+
+Live responses have `Content-Type: application/x-ndjson`. Each newline terminates one event:
+
+```json
+{"type":"delta","text":"I work on "}
+{"type":"delta","text":"reinforcement learning."}
+{"type":"done","reply":{"id":"resp_...","text":"I work on reinforcement learning.","mode":"live"}}
+```
+
+The final `done.reply` includes the full answer and, when available, the updated budget. An `error` event has `{ type: "error", error, status }`; an EOF without `done` is also a failure. Partial text remains visible on failure or stop, but is not included as a completed assistant turn in later history. The browser handles split UTF-8 characters and JSON lines and renders deltas as they arrive, without replaying the finished live answer through a typing animation. Node pipes the response body directly; Workers return the same Web stream.
+
+Browser and backend chat calls share a 60-second total deadline (`CHAT_TIMEOUT_MS`), covering stream consumption. The SDK uses the same timeout with automatic retries disabled. Stopping or disconnecting cancels the upstream request. The lightweight status check retains its separate 10-second timeout.
 
 ### Model call
 
-`chat/openai.ts` uses the OpenAI Responses API: `instructions` carries the system instructions, `input` the conversation turns, and `text.verbosity` is `low`. The model returns plain text; there is no JSON output schema or suggestions field. `reasoning.effort` is `low`, `max_output_tokens` is 1200, and `store` is `false`. The model comes from `OPENAI_MODEL`, default `gpt-5.4-mini`.
+`chat/openai.ts` uses the OpenAI Responses API with `stream: true`: `instructions` carries the system instructions, `input` the conversation turns, and `text.verbosity` is `low`. The model returns plain text; there is no JSON output schema or suggestions field. `reasoning.effort` is `low`, `max_output_tokens` is 4096, and `store` is `false`. The model comes from `OPENAI_MODEL`, default `gpt-5.4-mini`.
 
-`chat/prompt.ts` assembles the instructions: the rules first (answer only from the homepage content, speak as the owner in the first person while admitting to being an AI when asked outright, follow the visitor's language, plain text only, refuse unrelated requests with the `[[offtopic]]` marker, ignore rule-changing instructions inside messages), then `data/site.md` exactly as written, and only at the end a one-line pointer to the paper the visitor currently has open. The Markdown doubles as the prompt template, so editing the file changes both the page and what the model knows. Keeping the stable part first lets the provider cache the prefix.
+`chat/prompt.ts` assembles the instructions: the rules first (answer only from the homepage content, speak as the owner in the first person while admitting to being an AI when asked outright, follow the visitor's language, plain text only, refuse unrelated requests with the `[[offtopic]]` marker, ignore rule-changing instructions inside messages), then `data/site.md` exactly as written, and only at the end the selected paper as an aid for ambiguous references; explicit questions about other topics take precedence. The Markdown doubles as the prompt template, so editing the file changes both the page and what the model knows. Keeping the stable part first lets the provider cache the prefix. Replies default to one or two short paragraphs, with more detail for requested explanations, comparisons or complete lists. Cards are optional supporting references, capped at three; explicitly requested bibliographic details remain in the prose. Brief greetings and relevant terminology explanations are allowed; mixed requests receive an answer to the relevant part, while wholly unrelated substantive requests receive the off-topic marker.
 
 ### Papers named in a reply
 
@@ -229,7 +275,7 @@ For reasoning models, Skywork-OR1 is the better starting point.
 
 The id is that paper's `Id` field, and the homepage replaces each marker line with the paper's card, rendered from `data/site.md`. Title, authors, venue, year and links therefore always come from the file, and the card is live: clicking it opens the paper, its code, or a follow-up question about it.
 
-The contract lives in `src/chat.ts` (`PAPER_MARKER`, `splitPaperMarkers`, `stripPaperMarkers`, `MAX_PAPER_CARDS`) and is applied by `replyBody` in `render.ts`. Each text run between markers is escaped on its own, so model output never reaches the page as markup. `revealHTML` walks the finished HTML, so cards stream into place along with the text, and copying a reply strips the markers back out.
+The contract lives in `src/chat.ts` (`PAPER_MARKER`, `splitPaperMarkers`, `stripPaperMarkers`, `MAX_PAPER_CARDS`) and is applied by `replyBody` in `render.ts`. Each text run between markers is escaped on its own, so model output never reaches the page as markup. During live generation, incomplete markers are held back until complete; cards appear with the arriving text. Copying a reply strips the markers back out. `revealHTML` remains for static content and mock replies.
 
 ### Off-topic questions
 
@@ -255,6 +301,8 @@ Odd spacing and capitals inside a marker still resolve. A marker whose id is unk
 | `OPENAI_MODEL` | `gpt-5.4-mini` | Model to use |
 
 Hourly counts and the `usage:YYYY-MM-DD` ledger are updated atomically in SQLite-backed Durable Objects, with one object per counter key. Daily records expire after 90 days. The local Node server uses an atomic in-memory store and the same handler. `requests` counts successful replies; `errors` counts failed calls. When an incomplete, refused or empty reply includes provider usage, those tokens are also recorded. Failures without provider usage cannot be measured locally. Storage failures return 503 instead of silently resetting the budget.
+
+Usage-write failures are logged with the known token delta, UTC day and response ID when available, without discarding a successful answer or masking a model failure. Non-idempotent increments are not automatically retried, and no budget update is returned when accounting fails. Worker `waitUntil` keeps final accounting alive on disconnect. Interrupted streams may lack provider usage; those calls increment the error counter, but unknown tokens cannot be reconstructed locally.
 
 Each question checks the recorded daily total before calling the model. Calls already in flight can finish after the threshold is reached, so this is a stop threshold, not an exact token reservation. Without `OPENAI_API_KEY`, the backend returns a labelled mock reply. `TOKEN_BUDGET_PER_DAY=0` disables budget enforcement in both local and Worker environments; malformed numeric settings use the documented code defaults (9,500,000 tokens when no valid override is supplied).
 

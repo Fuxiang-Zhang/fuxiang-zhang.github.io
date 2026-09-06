@@ -3,7 +3,7 @@
  * text: the homepage shows prose, so there is nothing to enforce a schema over.
  */
 import OpenAI from 'openai';
-import { MAX_REPLY, type ChatTurn } from '../src/types.js';
+import { CHAT_TIMEOUT_MS, MAX_REPLY, type ChatTurn } from '../src/types.js';
 
 export const DEFAULT_MODEL = 'gpt-5.4-mini';
 
@@ -29,27 +29,43 @@ export interface ModelOptions {
   instructions: string;
   turns: ChatTurn[];
   signal?: AbortSignal;
+  onDelta: (text: string) => void;
 }
 
-export async function askModel({ apiKey, model = DEFAULT_MODEL, instructions, turns, signal }: ModelOptions): Promise<ModelReply> {
-  const client = new OpenAI({ apiKey, maxRetries: 1, timeout: 45_000 });
-  const response = await client.responses.create({
+export async function askModel({ apiKey, model = DEFAULT_MODEL, instructions, turns, signal, onDelta }: ModelOptions): Promise<ModelReply> {
+  const client = new OpenAI({ apiKey, maxRetries: 0, timeout: CHAT_TIMEOUT_MS });
+  const stream = await client.responses.create({
     model,
     instructions,
     input: turns.map(turn => ({ role: turn.role, content: turn.text })),
     text: { verbosity: 'low' },
     reasoning: { effort: 'low' },
-    max_output_tokens: 1200,
+    max_output_tokens: 4096,
+    stream: true,
     store: false,
   }, { signal });
-  const usage: ModelUsage = {
-    input: response.usage?.input_tokens ?? 0, cached: response.usage?.input_tokens_details?.cached_tokens ?? 0,
-    output: response.usage?.output_tokens ?? 0, total: response.usage?.total_tokens ?? 0,
-  };
-  if (response.status !== 'completed') {
-    throw new ModelReplyError(`Model reply ${response.status}: ${response.incomplete_details?.reason ?? 'unknown reason'}.`, usage);
+  try {
+    for await (const event of stream) {
+      if (event.type === 'response.output_text.delta') onDelta(event.delta);
+      if (event.type === 'response.completed' || event.type === 'response.incomplete' || event.type === 'response.failed') {
+        const response = event.response;
+        const usage: ModelUsage = {
+          input: response.usage?.input_tokens ?? 0,
+          cached: response.usage?.input_tokens_details?.cached_tokens ?? 0,
+          output: response.usage?.output_tokens ?? 0, total: response.usage?.total_tokens ?? 0,
+        };
+        if (response.status !== 'completed') {
+          throw new ModelReplyError(`Model reply ${response.status}: ${response.incomplete_details?.reason ?? response.error?.code ?? 'unknown reason'}.`, usage);
+        }
+        const content = response.output.flatMap(item => item.type === 'message' ? item.content : []);
+        if (content.some(part => part.type === 'refusal')) throw new ModelReplyError('Model refused.', usage);
+        return parseModelReply(response.id, content.flatMap(part => part.type === 'output_text' ? [part.text] : []).join(''), usage);
+      }
+      if (event.type === 'error') throw new Error(`Model stream error: ${event.code ?? 'unknown'}`);
+    }
+    signal?.throwIfAborted();
+    throw new Error('Model stream ended without a final response.');
+  } finally {
+    stream.controller.abort();
   }
-  const refusal = response.output.flatMap(item => item.type === 'message' ? item.content : []).find(part => part.type === 'refusal');
-  if (refusal) throw new ModelReplyError(`Model refused: ${refusal.refusal}`, usage);
-  return parseModelReply(response.id, response.output_text, usage);
 }

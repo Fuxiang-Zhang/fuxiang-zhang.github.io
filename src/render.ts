@@ -1,23 +1,34 @@
-import { isOfftopicReply, MAX_PAPER_CARDS, splitPaperMarkers } from './chat.js';
+import { isOfftopicReply, MAX_PAPER_CARDS, splitPaperMarkers, streamingReplyText } from './chat.js';
 import { copy, type CopyKey } from './content.js';
 import { buildCommands, commandForTopic } from './commands.js';
+import { markdown, renderInline } from './markdown-engine.js';
+import { parseBlocks } from './markdown.js';
 import { nameBanner } from './banner.js';
 import {
-  cardsOf, commandOf, idOf, paperCardId, sectionId, parseLinks,
+  cardsOf, sectionId, parseLinks,
   type Content, type Link, type Node as SiteNode, type Publication, type SectionId, type SiteData, type Message,
 } from './types.js';
 
 const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const escapeHTML = (value: unknown): string => String(value).replace(/[&<>"']/g, char => entities[char]);
-export const authorMarkup = (authors: string): string => escapeHTML(authors).replace(/Fuxiang Zhang\*?/g, name => `<strong>${name}</strong>`);
+export const authorMarkup = (authors: string, owner: string): string => authors.split(',').map(part => {
+  const name = part.trim().replace(/^and\s+/, '').replace(/\*$/, '');
+  return name === owner ? `<strong>${escapeHTML(part)}</strong>` : escapeHTML(part);
+}).join(',');
+/** Show up to six authors, retaining original order and the owner's credit. */
+export function compactAuthors(authors: string, owner: string): string {
+  const names = authors.split(',').map(name => name.trim().replace(/^and\s+/, ''));
+  if (names.length <= 6) return authors;
+  const ownerIndex = names.findIndex(name => name.replace(/\*$/, '') === owner);
+  const leadingCount = ownerIndex >= 6 ? 5 : 6;
+  const visible = names.filter((_, index) => index < leadingCount || index === ownerIndex);
+  if (ownerIndex >= 6) visible.splice(5, 0, '…');
+  return `${visible.join(', ')}, et al.`;
+}
 export function external(url: string | undefined, label: string, className = ''): string {
   return /^https?:\/\//i.test(url || '') ? `<a${className ? ` class="${className}"` : ''} href="${escapeHTML(url)}" target="_blank" rel="noopener noreferrer">${label}</a>` : '';
 }
-/** Escapes text from site data and turns [label](https://…) into links; everything else stays plain text. */
-export function inline(text: string): string {
-  return escapeHTML(text).replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label: string, url: string) =>
-    `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
-}
+export const inline = renderInline;
 const bracketLinks = (links: Link[] | undefined, className: string) => links?.length
   ? `<p class="${className}">${links.map(link => external(link.url, `[${escapeHTML(link.label)}]`)).join(' ')}</p>` : '';
 const t = (key: CopyKey): string => copy[key];
@@ -45,19 +56,19 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   const sectionsById = new Map(site.sections.map(section => [sectionId(section), section]));
   const getPaper = (id: string) => papersById.get(id);
   const sectionOf = (id: string) => sectionsById.get(id);
-  /** The preset the page opens on: the file's first section with a command. */
-  const home = site.sections.filter(commandOf).map(sectionId)[0] ?? '';
+
   /** The command whose section prints the publication cards; it labels paper output. */
   const papersCommand = commands.find(command => {
     const section = command.topic === undefined ? undefined : sectionOf(command.topic);
     return section !== undefined && cardsOf(section) !== undefined;
   })?.name ?? '';
-  /** One publication as terminal output, with complete authors and links. */
-  function paperCard(paper: Publication) {
+  /** One publication with compact author credits and links to the full details. */
+  function paperCard(paper: Publication, description?: SiteNode[]) {
     return `<article class="paper">
-      <div class="paper-meta"><span class="paper-venue-tag">${escapeHTML(paper.venueShort)}</span><span class="paper-year">${paper.year}</span><span class="paper-topic">${escapeHTML(paper.topic)}</span></div>
+      <div class="paper-meta"><span class="paper-venue-tag">${escapeHTML(paper.venueShort)}</span><span class="paper-year">${paper.year}</span></div>
       <button class="paper-title" data-paper="${escapeHTML(paper.id)}">${paperTitle(paper)}</button>
-      <p class="paper-authors">${authorMarkup(paper.authors)}</p>
+      ${description ? `<div class="paper-description">${renderNodes(description)}</div>` : ''}
+      <p class="paper-authors">${authorMarkup(compactAuthors(paper.authors, profile.name), profile.name)}</p>
       <div class="paper-actions">${[
         external(paper.links.paper, `[${t('openPaper')}]`, 'paper-action'),
         external(paper.links.code, `[${t('openCode')}]`, 'paper-action'),
@@ -71,81 +82,57 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       </div>`;
   }
 
-  /** Authored markers render the same cards as chat, without chat's three-card limit. */
-  const siteProse = (paragraphs: string[]) => paragraphs.map(paragraph => {
-    const id = paperCardId(paragraph);
-    if (id) {
-      const paper = getPaper(id);
-      return paper ? paperCard(paper) : '';
-    }
-    return `<p>${inline(paragraph)}</p>`;
-  }).join('');
-
-  /** Headings and list items share all field rendering; authored syntax selects their tags. */
-  function renderNode(node: SiteNode, level: number): string {
+  function profileHeader(): string {
+    const banner = nameBanner(profile.name);
+    return `${banner.length ? `<div class="name-banner" aria-hidden="true">${banner.map(word => `<pre>${escapeHTML(word)}</pre>`).join('')}</div>` : ''}
+      <p class="bio-position">${escapeHTML(profile.position)}</p>
+      <div class="bio-links">${profile.links.map(link => external(link.url, `[${escapeHTML(link.label)}]`)).join(' ')}
+      ${profile.email ? `<a href="mailto:${escapeHTML(profile.email)}">[Email]</a>` : ''}</div>`;
+  }
+  function metadata(node: SiteNode): string {
     const subtitle = subtitleOf(node);
-    const item = node.kind === 'item';
-    const tag = item ? 'strong' : `h${Math.min(level, 6)}`;
-    const wrapper = item ? 'li' : 'section';
-    return `<${wrapper} class="cv-row">
-      <div class="cv-heading"><${tag}>${escapeHTML(node.title)}</${tag}>${node.fields.period
-        ? `<span class="cv-period">${escapeHTML(node.fields.period)}</span>` : ''}</div>${subtitle
-        ? `<p class="cv-subtitle">${escapeHTML(subtitle)}</p>` : ''}
-      ${siteProse(node.prose)}${bracketLinks(parseLinks(node.fields.links), 'cv-links')}
-      ${renderNodes(node.children, level + (item ? 0 : 1))}
-      </${wrapper}>`;
+    return `${subtitle ? `<p class="cv-subtitle">${escapeHTML(subtitle)}</p>` : ''}${bracketLinks(parseLinks(node.fields.links), 'cv-links')}`;
   }
-  /** Document order and heading depth are preserved regardless of prose or field presence. */
-  function renderNodes(nodes: SiteNode[], level: number): string {
-    let html = '';
-    let inList = false;
-    for (const node of nodes) {
-      const item = node.kind === 'item';
-      if (item && !inList) html += '<ul class="cv-list">';
-      if (!item && inList) html += '</ul>';
-      inList = item;
-      html += renderNode(node, level);
+  function heading(node: SiteNode): string {
+    const tag = node.kind === 'item' ? 'strong' : `h${node.level ?? 3}`;
+    return `<div class="cv-heading"><${tag}>${inline(node.title)}</${tag}>${node.fields.period ? `<span class="cv-period">${escapeHTML(node.fields.period)}</span>` : ''}</div>`;
+  }
+  function renderNode(node: SiteNode): string {
+    switch (node.kind) {
+      case 'markdown': return markdown.render(node.text ?? '', { references: node.references });
+      case 'profile': return profileHeader();
+      case 'paper': {
+        const paper = getPaper(node.fields.ref);
+        return paper ? paperCard(paper, node.body.length ? node.body : undefined) : '';
+      }
+      case 'publication': return '';
+      case 'collapse': {
+        const tag = node.level ? `h${node.level}` : 'span';
+        return `<details class="content-collapse"${node.open ? ' open' : ''}><summary><${tag} class="collapse-heading"><span>${inline(node.title)}</span>${node.fields.period ? `<span class="cv-period">${escapeHTML(node.fields.period)}</span>` : ''}</${tag}></summary><div class="collapse-body">${metadata(node)}${renderNodes(node.body)}</div></details>`;
+      }
+      case 'list': {
+        const tag = node.ordered ? 'ol' : 'ul';
+        return `<${tag} class="cv-list"${node.ordered && node.start !== 1 ? ` start="${node.start}"` : ''}>${renderNodes(node.body)}</${tag}>`;
+      }
+      case 'item': return `<li class="cv-row">${node.title ? heading(node) : ''}${metadata(node)}${renderNodes(node.body)}</li>`;
+      case 'heading': return `<section class="content-section">${heading(node)}${metadata(node)}${renderNodes(node.body)}</section>`;
     }
-    return html + (inList ? '</ul>' : '');
   }
-
-  /** The papers a section prints, when its `Cards` field names the section that holds them. */
+  /** A single ordered tree drives every section and explicit component. */
+  function renderNodes(nodes: SiteNode[]): string { return nodes.map(renderNode).join(''); }
   function cardsFor(section: SiteNode): Publication[] | undefined {
     const source = cardsOf(section);
     if (source === undefined) return undefined;
-    const ids = new Set((sectionOf(source)?.children ?? []).map(idOf));
-    return publications.filter(paper => ids.has(paper.id));
+    return (sectionOf(source)?.body ?? []).flatMap(node => {
+      const paper = getPaper(node.fields.id);
+      return paper ? [paper] : [];
+    });
   }
-
-  /*
-   * A preset prints its section and nothing else: the file's own heading, the
-   * prose under it, then its records. The home preset carries the profile
-   * header, because that is the screen the page opens on.
-   */
   function sectionOpening(section: SiteNode): string {
     if (loadFailed) return loadError();
-    const id = sectionId(section);
     const papers = cardsFor(section);
-    const body = papers
-      ? `<div class="paper-list">${papersList(papers)}</div>${equalNote(papers)}`
-      : renderNodes(section.children, 3);
-    const head = `<h2 class="section-title">${escapeHTML(section.title)}</h2>${siteProse(section.prose)}`;
-    if (id !== home) return head + body;
-    const banner = nameBanner(profile.name);
-    return `<h1 class="bio-name">${escapeHTML(profile.name)}</h1>
-      ${banner.length ? `<div class="name-banner" aria-hidden="true">${banner.map(word => `<pre>${escapeHTML(word)}</pre>`).join('')}</div>` : ''}
-      <p class="bio-position">${escapeHTML(profile.position)}</p>
-      <div class="bio-links">${profile.links.map(link => external(link.url, `[${escapeHTML(link.label)}]`)).join(' ')}
-      ${profile.email ? `<a href="mailto:${escapeHTML(profile.email)}">[Email]</a>` : ''}</div>
-      <div class="bio-copy">${head}${body}</div>
-      <nav class="preset-links" aria-label="Content presets">${presetLinks(id)}</nav>
-      <p class="terminal-note">Click a command above, type /help, or ask your question below.</p>`;
-  }
-  /** Every preset the file declares except the one being read, in file order. */
-  function presetLinks(current: string) {
-    return commands.filter(command => command.topic && command.topic !== current)
-      .map(command => `<button type="button" data-command="${escapeHTML(command.name)}">${escapeHTML(command.name)}</button>`)
-      .join('<span aria-hidden="true"> · </span>');
+    return `<h2 class="section-title">${inline(section.title)}</h2>${renderNodes(section.body)}${papers
+      ? `<div class="paper-list">${papersList(papers)}</div>${equalNote(papers)}` : ''}`;
   }
   function helpContent() {
     return `<h2>Available commands</h2><div class="help-list">${commands.map(command =>
@@ -206,7 +193,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
     }
     if (message.state === 'pending') {
       return `<div class="message bot-message" ${anchor}><div class="message-body">
-        <div class="thinking" aria-label="${t('thinking')}"><span></span><span></span><span></span></div>
+        ${message.text ? replyBody(streamingReplyText(message.text), false) + '<span class="stream-cursor" aria-hidden="true"></span>' : `<div class="thinking" aria-label="${t('thinking')}"><span></span><span></span><span></span></div>`}
       </div></div>`;
     }
     const retryable = message.state === 'error' || message.state === 'stopped';
@@ -215,6 +202,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       ? `<button data-retry="${escapeHTML(message.id)}">${t('retry')}</button>`
       : `<button data-copy="${escapeHTML(message.id)}">${t('copy')}</button>`;
     return `<div class="message bot-message" ${anchor}><div class="message-body">
+      ${retryable && message.text ? replyBody(streamingReplyText(message.text), false) : ''}
       ${replyBody(text, message.state === 'error')}
       <div class="message-controls"><span class="reply-label">${t(message.mode === 'live' ? 'aiReply' : 'simulated')}</span>${action}</div>
     </div></div>`;
@@ -223,11 +211,11 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   function paperDetail(paper: Publication) {
     return `<h3 class="detail-title">${paperTitle(paper)}</h3>
       <div class="detail-label">${t('authors')}</div>
-      <p class="detail-authors">${authorMarkup(paper.authors)}</p>${paper.authors.includes('*') ? `<p class="footnote">${t('equal')}</p>` : ''}
+      <p class="detail-authors">${authorMarkup(paper.authors, profile.name)}</p>${paper.authors.includes('*') ? `<p class="footnote">${t('equal')}</p>` : ''}
       <div class="detail-label">${t('venue')}</div>
       <p class="detail-venue"><em>${escapeHTML(paper.venue)}</em>, ${paper.year} · ${escapeHTML(paper.topic)}</p>${paper.abstract ? `
       <div class="detail-label">${t('abstract')}</div>
-      <div class="detail-abstract">${siteProse(paper.abstract.split(/\n\s*\n/))}</div>` : ''}
+      <div class="detail-abstract">${renderNodes(parseBlocks(paper.abstract))}</div>` : ''}
       <p class="detail-links">${paperLinks(paper)}</p>
       <p class="detail-ask"><button class="text-link" data-ask="${escapeHTML(paper.id)}">${t('askPaper')} →</button><br><span class="footnote">${t('detailDescription')}</span></p>`;
   }

@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Explore Fuxiang Zhang’s research in large language models, reinforcement learning, and multi-agent systems. Publications, background, and a conversational research assistant.">
+  <meta name="description" content="{{description}}">
   <meta name="theme-color" content="#fafafa">
-  <meta property="og:title" content="Fuxiang Zhang — Research Terminal">
-  <meta property="og:description" content="Large language models. Reinforcement learning. Multi-agent systems. Explore the research and the person behind it.">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
   <meta property="og:type" content="website">
   <meta property="og:image" content="assets/Photo.JPG">
   <meta name="twitter:card" content="summary">
-  <title>Fuxiang Zhang - Homepage</title>
+  <title>{{title}}</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="preload" href="assets/fonts/maple-mono.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
@@ -19,7 +19,7 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="app-shell" id="app-shell">
-    <header class="terminal-bar"><a href="#bio" data-command="/bio">Fuxiang Zhang - Homepage</a><span><button id="theme-toggle" aria-label="Switch color theme">[dark]</button></span></header>
+    <header class="terminal-bar"><h1><a id="home-link" href="#{{home}}" data-command="{{homeCommand}}">{{title}}</a></h1><span><button id="theme-toggle" aria-label="Switch color theme">[dark]</button></span></header>
     <main class="main" id="main" tabindex="-1">
       <div class="scroll-area" id="scroll-area">
         <div class="content" id="content"><div id="messages" class="messages" aria-label="Terminal output"></div></div>

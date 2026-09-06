@@ -16,12 +16,17 @@
     "node": ">=22.9"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
+    "@types/markdown-it-container": "^4.0.1",
     "@types/node": "^22.20.1",
+    "esbuild": "^0.28.2",
     "miniflare": "5.20260903.0-alpha",
     "typescript": "^7.0.2",
     "wrangler": "^4.129.0"
   },
   "dependencies": {
+    "markdown-it": "^15.0.1",
+    "markdown-it-container": "^4.0.0",
     "openai": "^7.10.0"
   }
 }
