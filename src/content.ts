@@ -11,6 +11,7 @@ export const copy = {
   noResults:'No publications in this group yet.', equal:'* denotes equal contribution.',
   send:'Send message', stop:'Stop response', stopped:'Response stopped.', failed:'The reply could not be delivered. Please check that the chat service is running, then try again.',
   retry:'Try again', copy:'Copy reply', copied:'Reply copied.', copyFailed:'Could not copy. You can select and copy the reply text.', thinking:'Preparing a reply…',
+  printing:'printing output', printingWait:'Please wait until the output has finished printing.',
   authors:'Authors', venue:'Publication', abstract:'Abstract', openPaper:'Paper', openCode:'Code',
   detailDescription:'Answers come from an AI assistant; refer to the paper for research details.',
   paperPrompt:'Tell me about this paper: ', context:'Discussing', removeContext:'Remove paper context',

@@ -214,7 +214,7 @@ textarea::placeholder { color: var(--faint); }
   *,*::before,*::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 @media print {
-  .terminal-bar,.composer-region,.status-bar { display: none; }
+  .terminal-bar,.composer-region,.status-bar,.skip-link { display: none; }
   .app-shell { display: block; height: auto; border: 0; margin: 0; width: 100%; }
   .scroll-area { overflow: visible; }
   .paper,.cv-row { break-inside: avoid; }

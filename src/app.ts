@@ -29,6 +29,30 @@ let pending: AbortController | undefined;
 /** Replies that stream in on their next render, and the streams currently running. */
 const revealNext = new Set<string>();
 const reveals = new Map<string, Reveal>();
+/**
+ * Every reveal still printing, whether a reply, command output or an opened
+ * section. Questions and commands wait until the transcript is quiet, so only
+ * one piece of output is ever printing and the page follows exactly that one.
+ */
+const running = new Set<Reveal>();
+const printing = () => running.size > 0;
+function track(reveal: Reveal): Reveal {
+  running.add(reveal);
+  void reveal.done.then(() => {
+    running.delete(reveal);
+    updateComposer();
+  });
+  return reveal;
+}
+/** Shows every running reveal in full, e.g. before content a hash route requested. */
+function finishPrinting() {
+  for (const reveal of [...running]) reveal.cancel();
+}
+function holdWhilePrinting(): boolean {
+  if (!printing()) return false;
+  announce(t('printingWait'));
+  return true;
+}
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const input = $<HTMLTextAreaElement>('#message');
 const scrollArea = $('#scroll-area');
@@ -89,7 +113,7 @@ function revealCollapse(panel: HTMLDetailsElement) {
     previousTop = scrollArea.scrollTop;
   };
   scrollArea.addEventListener('scroll', onScroll);
-  const reveal = revealHTML(body, body.innerHTML, {
+  const reveal = track(revealHTML(body, body.innerHTML, {
     instantSelector: '.collapse-body, .name-banner',
     onStep: () => {
       body.querySelectorAll<HTMLDetailsElement>('.content-collapse[open]').forEach(revealCollapse);
@@ -98,9 +122,10 @@ function revealCollapse(panel: HTMLDetailsElement) {
       if (overflow > 0) scrollArea.scrollTop += overflow;
       previousTop = scrollArea.scrollTop;
     },
-  });
+  }));
   previousTop = scrollArea.scrollTop;
   panelReveals.set(panel, reveal);
+  updateComposer();
   void reveal.done.then(() => {
     scrollArea.removeEventListener('scroll', onScroll);
     if (panelReveals.get(panel) === reveal) panelReveals.delete(panel);
@@ -118,7 +143,7 @@ function startReveal(id: string, body: HTMLElement, followLatest: boolean) {
   const onScroll = () => { following = nearBottom(); };
   scrollArea.addEventListener('scroll', onScroll);
   scrollArea.style.scrollBehavior = 'auto';
-  const reveal = revealHTML(body, body.innerHTML, {
+  const reveal = track(revealHTML(body, body.innerHTML, {
     instantSelector: '.collapse-body, .name-banner',
     onStep: () => {
       const openPanels = body.querySelectorAll<HTMLDetailsElement>('.content-collapse[open]');
@@ -126,7 +151,7 @@ function startReveal(id: string, body: HTMLElement, followLatest: boolean) {
       openPanels.forEach(revealCollapse);
       if (following && !openPanels.length) scrollArea.scrollTop = scrollArea.scrollHeight;
     },
-  });
+  }));
   reveals.set(id, reveal);
   void reveal.done.then(() => {
     scrollArea.removeEventListener('scroll', onScroll);
@@ -168,7 +193,7 @@ function renderTheme() {
 function updateComposer() {
   const busy = Boolean(pending);
   const send = $<HTMLButtonElement>('#send-button');
-  send.disabled = !busy && !input.value.trim();
+  send.disabled = !busy && (!input.value.trim() || printing());
   send.textContent = busy ? '[stop]' : '[enter]';
   send.setAttribute('aria-label', t(busy ? 'stop' : 'send'));
   input.readOnly = busy;
@@ -179,7 +204,7 @@ function updateComposer() {
   $('#context-chip').hidden = !paper;
   $('#context-chip').innerHTML = view.paperContext(paper);
   const last = state.current.messages.at(-1);
-  const status = busy ? 'preparing reply' : last?.role === 'assistant' && last.state === 'error' ? 'reply failed'
+  const status = busy ? 'preparing reply' : printing() ? t('printing') : last?.role === 'assistant' && last.state === 'error' ? 'reply failed'
     : last?.role === 'assistant' && last.state === 'stopped' ? 'reply stopped' : 'ready';
   $('#terminal-status').textContent = status;
 }
@@ -207,6 +232,7 @@ function renderCommands() {
   document.getElementById(`command-option-${selectedCommand}`)?.scrollIntoView({ block: 'nearest' });
 }
 function executeCommand(command: Command, fromInput = false) {
+  if (holdWhilePrinting()) return;
   if (fromInput) { input.value = ''; state.current.draft = ''; }
   $('#command-error').hidden = true;
   closeCommands();
@@ -217,6 +243,7 @@ function executeCommand(command: Command, fromInput = false) {
 }
 function submitInput() {
   if (Boolean(pending)) { void sendMessage(); return; }
+  if (holdWhilePrinting()) return;
   const parsed = parseInput(input.value, pageCommands);
   if (parsed.kind === 'command') { executeCommand(parsed.command, true); return; }
   if (parsed.kind === 'invalid') {
@@ -241,6 +268,8 @@ let routed = false;
 function route() {
   closeCommands();
   $('#command-error').hidden = true;
+  // Browser navigation cannot be held back, so earlier output completes at once instead of printing alongside.
+  finishPrinting();
   const content = resolveRoute(location.hash, state.site);
   if (content) show(content, routed);
   else if (!routed) show(resolveRoute('', state.site)!, false);
@@ -261,6 +290,7 @@ async function sendMessage(retryId?: string) {
     pending.abort();
     return;
   }
+  if (holdWhilePrinting()) return;
   // Once the daily budget is gone, questions are held back instead of failing at the backend.
   if (budget?.exhausted) {
     announce(budgetText(budget));
@@ -434,7 +464,7 @@ document.addEventListener('click', async event => {
   const button = event.target instanceof Element ? event.target.closest('button') : null;
   if (!button) return;
   const { paper, ask, retry, copy } = button.dataset;
-  if (paper && getPaper(paper)) show({ kind: 'paper', paperId: paper });
+  if (paper && getPaper(paper) && !holdWhilePrinting()) show({ kind: 'paper', paperId: paper });
   if (ask) {
     const publication = getPaper(ask);
     if (publication) askAboutPaper(publication);
