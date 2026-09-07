@@ -217,7 +217,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       <div class="detail-label">${t('abstract')}</div>
       <div class="detail-abstract">${renderNodes(parseBlocks(paper.abstract))}</div>` : ''}
       <p class="detail-links">${paperLinks(paper)}</p>
-      <p class="detail-ask"><button class="text-link" data-ask="${escapeHTML(paper.id)}">${t('askPaper')} →</button><br><span class="footnote">${t('detailDescription')}</span></p>`;
+      <p class="detail-ask"><button class="text-link" data-ask="${escapeHTML(paper.id)}" aria-label="${t('askPaper')}">${t('askCommand')}</button><br><span class="footnote">${t('detailDescription')}</span></p>`;
   }
   function paperContext(paper: Publication | undefined) {
     return paper ? `<span>${t('context')}: ${paperTitle(paper)}</span>
