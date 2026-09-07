@@ -92,6 +92,39 @@
     .links a {
       margin-right: 10px;
     }
+    .links .vibe-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 10px 0 0;
+      padding: 13px 18px;
+      border-radius: 12px;
+      background: linear-gradient(120deg, #6d28d9, #2454c6);
+      color: #fff;
+      font-size: 0.95em;
+      font-weight: 700;
+      line-height: 1.4;
+      box-shadow: 0 6px 18px rgba(109, 40, 217, 0.25);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+    .links .vibe-link:hover {
+      text-decoration: none;
+      transform: translateY(-2px);
+      box-shadow: 0 9px 24px rgba(109, 40, 217, 0.35);
+    }
+    .links .vibe-link:focus-visible {
+      outline: 3px solid #6d28d9;
+      outline-offset: 4px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .links .vibe-link {
+        transition: none;
+      }
+      .links .vibe-link:hover {
+        transform: none;
+      }
+    }
     .publication-item {
         margin-bottom: 1.5em;
         line-height: 1.4;
@@ -130,6 +163,7 @@
       <p><a href="https://github.com/mansicer">GitHub</a></p>
       <p><a href="https://scholar.google.com/citations?user=GZRrWXAAAAAJ">Google Scholar</a></p>
       <p><a href="https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/">Linkedin</a></p>
+      <p><a class="vibe-link" href="/vibe"><span aria-hidden="true">✦</span> Switch to Vibe Mode <span aria-hidden="true">→</span></a></p>
     </div>
   </div>
 
