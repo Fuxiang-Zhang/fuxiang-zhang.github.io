@@ -18,19 +18,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout original homepage
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
           path: production
           persist-credentials: false
       - name: Checkout terminal homepage
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: feat/terminal-homepage
           path: terminal
           persist-credentials: false
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
@@ -54,7 +54,7 @@ jobs:
           test -f _site/vibe/index.html
           test -f _site/vibe/data/site.md
       - name: Upload complete site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: '_site'
 
