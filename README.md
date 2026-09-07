@@ -315,7 +315,9 @@ Limitation: the origin check only stops other web pages. A script can forge the 
 
 ### Frontend (GitHub Pages)
 
-On every push to `main`, `.github/workflows/static.yml` installs the locked dependencies, type-checks, runs the tests, and publishes `dist/` to GitHub Pages. The build runs in a temporary directory and replaces `.build/` and `dist/` only when everything succeeds; a failed build keeps the previous output. Generated JavaScript is not committed.
+On every push to `main` or `feat/terminal-homepage`, `.github/workflows/static.yml` checks out both branches. It copies the static `main` homepage to the site root, installs the terminal branch’s locked dependencies, type-checks and runs its tests (which build `dist/`), then places that output at `/vibe/`. The combined site is uploaded and deployed once, so both versions are included in every deployment. The public URLs are `https://fuxiang-zhang.github.io/` and `https://fuxiang-zhang.github.io/vibe/`. The build runs in a temporary directory and replaces `.build/` and `dist/` only when everything succeeds; a failed build keeps the previous output. Generated JavaScript is not committed.
+
+Keep this workflow identical on both branches: copy only `.github/workflows/static.yml` to `main`, preserving its original homepage. In repository Settings → Pages, select GitHub Actions as the source; in Settings → Environments → github-pages, allow deployments from both branches. Until the workflow is synchronized, the old main workflow can overwrite `/vibe/`. Both branches must exist remotely. A failed terminal build prevents the combined deployment and leaves the previous live site intact. Static resource and data URLs must remain relative so they resolve under `/vibe/`. The preview uses the same production chat Worker; use `/vibe/?chat=mock` for mock replies.
 
 The backend URL is `productionChatEndpoint` in `src/config.ts`, currently pointing at the deployed Worker. Setting it to `null` returns the homepage to mock replies.
 
