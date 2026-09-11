@@ -1,386 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fuxiang Zhang | Homepage</title>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YN1PYBS8J3"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-YN1PYBS8J3');
-  </script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px auto;
-      padding: 0 20px;
-      background: #f5f7fa;
-      color: #333;
-      max-width: 1200px;
-    }
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-    }
-    .left-panel {
-      flex: 1;
-      min-width: 300px;
-      padding-right: 40px;
-      text-align: center;
-    }
-    .right-panel {
-      flex: 3;
-      min-width: 600px;
-    }
-    .profile-pic {
-      width: 100%;
-      max-width: 180px;
-      border-radius: 10px;
-    }
-    h1, h2, h3 {
-      color: #2c3e50;
-    }
-    h1 {
-        font-size: 2.2em;
-    }
-    h2 {
-      margin: 42px 0 22px;
-      font-size: 1.9em;
-      font-weight: 700;
-      color: #1c2e46;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      letter-spacing: 0.01em;
-    }
-    h2::after {
-      content: '';
-      flex: 1;
-      height: 2px;
-      background: linear-gradient(90deg, rgba(41, 128, 185, 0.4), rgba(41, 128, 185, 0));
-      border-radius: 1px;
-    }
-    h3 {
-      position: relative;
-      margin: 34px 0 18px;
-      font-size: 1.28em;
-      font-weight: 600;
-      color: #1f3d5e;
-      letter-spacing: 0.03em;
-    }
-    h3::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      bottom: -10px;
-      width: 64px;
-      height: 3px;
-      background: linear-gradient(90deg, #2980b9, #6bc4ff);
-      border-radius: 2px;
-    }
-    a {
-      color: #2980b9;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    .links a {
-      margin-right: 10px;
-    }
-    .links .vibe-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin: 10px 0 0;
-      padding: 13px 18px;
-      border-radius: 12px;
-      background: linear-gradient(120deg, #6d28d9, #2454c6);
-      color: #fff;
-      font-size: 0.95em;
-      font-weight: 700;
-      line-height: 1.4;
-      box-shadow: 0 6px 18px rgba(109, 40, 217, 0.25);
-      transition: transform 180ms ease, box-shadow 180ms ease;
-    }
-    .links .vibe-link:hover {
-      text-decoration: none;
-      transform: translateY(-2px);
-      box-shadow: 0 9px 24px rgba(109, 40, 217, 0.35);
-    }
-    .links .vibe-link:focus-visible {
-      outline: 3px solid #6d28d9;
-      outline-offset: 4px;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .links .vibe-link {
-        transition: none;
-      }
-      .links .vibe-link:hover {
-        transform: none;
-      }
-    }
-    .publication-item {
-        margin-bottom: 1.5em;
-        line-height: 1.4;
-    }
-    .publication-item h5 {
-        margin: 0 0 0.2em 0;
-        font-size: 1.1em;
-    }
-    .publication-item h5 a {
-        color: #333;
-    }
-    .publication-item p {
-        margin: 0;
-        color: #555;
-    }
-    .publication-item .links a {
-        margin-right: 8px;
-        font-size: 0.9em;
-    }
-    .education-item, .internship-item {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-    }
-  </style>
+  <meta name="description" content="{{description}}">
+  <meta name="theme-color" content="#fafafa">
+  <meta property="og:title" content="{{title}}">
+  <meta property="og:description" content="{{description}}">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/Photo.JPG">
+  <meta name="twitter:card" content="summary">
+  <title>{{title}}</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/maple-mono.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
 </head>
 <body>
-
-<div class="container">
-  <div class="left-panel">
-    <img src="assets/Photo.JPG" alt="Fuxiang Zhang" class="profile-pic"/>
-    <h1>Fuxiang Zhang</h1>
-    
-    <div class="links">
-      <p><a href="mailto:zfx.agi@gmail.com">Email</a></p>
-      <p><a href="https://github.com/mansicer">GitHub</a></p>
-      <p><a href="https://scholar.google.com/citations?user=GZRrWXAAAAAJ">Google Scholar</a></p>
-      <p><a href="https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/">Linkedin</a></p>
-      <p><a class="vibe-link" href="/vibe"><span aria-hidden="true">✦</span> Switch to Vibe Mode <span aria-hidden="true">→</span></a></p>
-    </div>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="app-shell" id="app-shell">
+    <header class="terminal-bar"><h1><a id="home-link" href="#{{home}}" data-command="{{homeCommand}}">{{title}}</a></h1><span><a href="/reading/">[reading mode]</a><button id="theme-toggle" aria-label="Switch color theme">[dark]</button></span></header>
+    <main class="main" id="main" tabindex="-1">
+      <div class="scroll-area" id="scroll-area">
+        <div class="content" id="content"><div id="messages" class="messages" aria-label="Terminal output"></div></div>
+      </div>
+        <div class="composer-region"><div class="composer-wrap">
+          <section class="command-menu" id="command-menu" aria-label="Command suggestions" hidden>
+            <div class="command-menu-heading"><span>commands</span><button type="button" id="close-commands" aria-label="Close commands">[esc]</button></div>
+            <div id="command-options" role="listbox" aria-label="Commands"></div>
+            <p class="command-menu-note">↑↓ select · Tab complete · Enter run</p>
+          </section>
+          <div class="context-chip" id="context-chip" hidden></div>
+          <p class="command-error" id="command-error" role="status" hidden></p>
+          <p class="budget-notice" id="budget-notice" role="status" hidden></p>
+          <form class="composer" id="chat-form">
+            <label for="message" class="sr-only">Your question or command</label>
+            <span class="input-prompt" aria-hidden="true">›</span>
+            <textarea id="message" rows="1" maxlength="2000" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Type /help or ask a question…" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="command-options" aria-describedby="composer-hint"></textarea>
+            <button type="submit" class="send-button" id="send-button" aria-label="Send message" disabled>[enter]</button>
+          </form>
+          <div class="composer-hint" id="composer-hint"><button type="button" data-command="/help">/help</button> · <span>Type anywhere · Shift+Enter newline</span></div>
+        </div></div>
+    </main>
+    <footer class="status-bar"><span id="terminal-status">ready</span><span id="chat-mode">chat: simulated</span></footer>
   </div>
-
-<div class="right-panel">
-<h2>About Me</h2>
-<p>
-  I am a Ph.D. candidate at the College of Computing and Data Science, <a href="https://www.ntu.edu.sg/">Nanyang Technological University</a>, starting from January 2025, advised by Prof. <a href="https://personal.ntu.edu.sg/boan">Bo An</a>. I am part of an industrial post-graduate program (IPP) with <a href="https://skywork.ai">Skywork AI</a>.
-</p>
-<p>
-  I obtained my Master's and Bachelor's degrees from Nanjing University. During my time at Nanjing University, I was a member of the <a href="http://www.lamda.nju.edu.cn/MainPage.ashx">LAMDA</a> group, in a reinforcement learning team led by Prof. <a href="https://www.lamda.nju.edu.cn/zhangzz/">Zongzhang Zhang</a>.
-</p>
-
-<h2>Research Interests</h2>
-<p><em>Large Language Models, Reinforcement Learning, Multi-Agent Reinforcement Learning</em></p>
-
-<h2>Publications</h2>
-
-<h3>Preprint and Technical Reports</h3>
-
-  <div class="publication-item">
-    <h5>SkyReels-V4: Multi-modal Video-Audio Generation, Inpainting and Editing Model</h5>
-    <p>
-      Guibin Chen, Dixuan Lin, Jiangping Yang, Youqiang Zhang, Zhengcong Fei, Debang Li, Sheng Chen, Chaofeng Ao, Nuo Pang, Yiming Wang, Yikun Dou, Zheng Chen, Mingyuan Fan, Tuanhui Li, Mingshan Chang, Hao Zhang, Xiaopeng Sun, Jingtao Xu, Yuqiang Xie, Jiahua Wang, Zhiheng Xu, Weiming Xiong, Yuzhe Jin, Baoxuan Gu, Binjie Mao, Yunjie Yu, Jujie He, Yuhao Feng, Shiwen Tu, Chaojie Wang, Rui Yan, Wei Shen, Jingchen Wu, Peng Zhao, Xuanyue Zhong, Zhuangzhuang Liu, Kaifei Wang, <strong>Fuxiang Zhang</strong>, Weikai Xu, Wenyan Liu, Binglu Zhang, Yu Shen, Tianhui Xiong, Bin Peng, Liang Zeng, Xuchen Song, Haoxiang Guo, Peiyu Wang, Max W. Y. Lam, Chien-Hung Liu, Yahui Zhou<br>
-      <em>Technical Report</em>, 2026<br>
-      <span class="links"><a href="https://arxiv.org/abs/2602.21818">[Paper]</a></span>
-    </p>
-  </div>
-  
-  <div class="publication-item">
-    <h5>Dr. MAS: Stable Reinforcement Learning for Multi-Agent LLM Systems</h5>
-    <p>
-      Lang Feng, Longtao Zheng, Shuo He, <strong>Fuxiang Zhang</strong>, Bo An<br>
-      <em>ICLR Workshop on Multi-Agent Learning and Its Opportunities in the Era of Generative AI (MALGAI)</em>, 2026<br>
-      <span class="links"><a href="https://arxiv.org/abs/2602.08847">[Paper]</a></span>
-    </p>
-  </div>
-
-  <div class="publication-item">
-    <h5>DeRL-SWE: Decoupled Reinforcement Learning with Nested Credit Assignment for Software Engineering</h5>
-    <p>
-      <strong>Fuxiang Zhang</strong>, Xinyu Guan, Jujie He, Liang Zeng, Jiacheng Xu, Yang Liu, Bo An<br>
-      <em>ICML Workshop on Deep Learning for Code (DL4C)</em>, 2026<br>
-      <span class="links"><a href="https://openreview.net/forum?id=MisdGC6Jlh">[Paper]</a></span>
-    </p>
-  </div>
-
-  <div class="publication-item">
-    <h5>Skywork Open Reasoner 1 Technical Report</h5>
-    <p>
-      Jujie He, Jiacai Liu, Chris Yuhao Liu, Rui Yan, Chaojie Wang, Peng Cheng, Xiaoyu Zhang, <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Wei Shen, Siyuan Li, Liang Zeng, Tianwen Wei, Cheng Cheng, Bo An, Yang Liu, Yahui Zhou<br>
-      <em>Technical Report</em>, 2025<br>
-      <span class="links"><a href="https://arxiv.org/abs/2505.22312">[Paper]</a></span>
-    </p>
-  </div>
-
-  <div class="publication-item">
-    <h5>Skywork-Reward-V2: Scaling Preference Data Curation via Human-AI Synergy</h5>
-    <p>
-      Chris Yuhao Liu, Liang Zeng, Yuzhen Xiao, Jujie He, Jiacai Liu, Chaojie Wang, Rui Yan, Wei Shen, <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Yang Liu, Yahui Zhou<br>
-      <em>Technical Report</em>, 2025<br>
-      <span class="links"><a href="https://arxiv.org/abs/2507.01352">[Paper]</a> <a href="https://github.com/SkyworkAI/Skywork-Reward-V2">[Code]</a></span>
-    </p>
-  </div>
-
-<h3>Conference Papers</h3>
-<div class="publication-item">
-  <h5>REAR: Test-time Preference Realignment through Reward Decomposition</h5>
-  <p>
-    <strong>Fuxiang Zhang</strong>, Pengcheng Wang, Chenran Li, Yi-Chen Li, Yuxin Chen, Lang Feng, Chenfeng Xu, Masayoshi Tomizuka, Bo An<br>
-    <em>International Conference on Machine Learning (ICML)</em>, 2026<br>
-    <span class="links"><a href="https://arxiv.org/abs/2606.30339">[Paper]</a> <a href="https://github.com/mansicer/REAR">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Incentivizing LLMs to Self-Verify Their Answers</h5>
-  <p>
-    <strong>Fuxiang Zhang</strong>, Jiacheng Xu, Chaojie Wang, Ce Cui, Yang Liu, Bo An<br>
-    <em>Conference on Neural Information Processing Systems (NeurIPS)</em>, 2025<br>
-    <span class="links"><a href="https://arxiv.org/abs/2506.01369">[Paper]</a> <a href="https://github.com/mansicer/self-verification">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Multi-Agent Imitation by Learning and Sampling from Factorized Soft Q-Function</h5>
-  <p>
-    Yi-Chen Li, Zhongxiang Ling, Tao Jiang, <strong>Fuxiang Zhang</strong>, Pengyuan Wang, Lei Yuan, Zongzhang Zhang, Yang Yu<br>
-    <em>Conference on Neural Information Processing Systems (NeurIPS)</em>, 2025<br>
-    <span class="links"><a href="https://papers.neurips.cc/paper_files/paper/2025/hash/13a6f537e943a598b8719b03181a8e2a-Abstract-Conference.html">[Paper]</a> <a href="https://github.com/LAMDA-RL/MAFIS">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Q-Adapter: Customizing Pre-trained LLMs to New Preferences with Forgetting Mitigation</h5>
-  <p>
-    Yi-Chen Li*, <strong>Fuxiang Zhang*</strong>, Wenjie Qiu, Lei Yuan, Chengxing Jia, Zongzhang Zhang, Yang Yu, Bo An<br>
-    <em>International Conference on Learning Representations (ICLR)</em>, 2025<br>
-    <span class="links"><a href="https://arxiv.org/abs/2407.03856">[Paper]</a> <a href="https://github.com/mansicer/Q-Adapter">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Disentangling Policy from Offline Task Representation Learning via Adversarial Data Augmentation</h5>
-  <p>
-    Chengxing Jia*, <strong>Fuxiang Zhang*</strong>, Yi-Chen Li, Chenxiao Gao, Xu-Hui Liu, Lei Yuan, Zongzhang Zhang, and Yang Yu<br>
-    <em>International Conference on Autonomous Agents and Multiagent Systems (AAMAS)</em>, 2024<br>
-    <span class="links"><a href="https://arxiv.org/abs/2403.07261">[Paper]</a> <a href="https://github.com/LAMDA-RL/ReDA">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Policy Rehearsing: Training Generalizable Policies for Reinforcement Learning</h5>
-  <p>
-    Chengxing Jia, Chenxiao Gao, Hao Yin, <strong>Fuxiang Zhang</strong>, Xiyao Chen, Tian Xu, Lei Yuan, Zongzhang Zhang, Zhi-Hua Zhou<br>
-    <em>International Conference on Learning Representations (ICLR)</em>, 2024<br>
-    <span class="links"><a href="https://openreview.net/pdf?id=m3xVPaZp6Z">[Paper]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Internal Logical Induction for Pixel-Symbolic Reinforcement Learning</h5>
-  <p>
-    Jiacheng Xu, Chao Chen, <strong>Fuxiang Zhang</strong>, Lei Yuan, Zongzhang Zhang, Yang Yu<br>
-    <em>ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD)</em>, 2023<br>
-    <span class="links"><a href="https://dl.acm.org/doi/10.1145/3580305.3599393">[Paper]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Policy Regularization with Dataset Constraint for Offline Reinforcement Learning</h5>
-  <p>
-    Yuhang Ran*, Yi-Chen Li*, <strong>Fuxiang Zhang</strong>, Zongzhang Zhang, and Yang Yu<br>
-    <em>International Conference on Machine Learning (ICML)</em>, 2023<br>
-    <span class="links"><a href="https://arxiv.org/abs/2306.06569">[Paper]</a> <a href="https://github.com/LAMDA-RL/PRDC">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Discovering Generalizable Multi-agent Coordination Skills from Multi-task Offline Data</h5>
-  <p>
-    <strong>Fuxiang Zhang*</strong>, Chengxing Jia*, Yi-Chen Li, Lei Yuan, Yang Yu, Zongzhang Zhang<br>
-    <em>International Conference on Learning Representations (ICLR)</em>, 2023<br>
-    <span class="links"><a href="https://openreview.net/pdf?id=53FyUAdP7d">[Paper]</a> <a href="https://github.com/LAMDA-RL/ODIS">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Multi-Agent Concentrative Coordination with Decentralized Task Representation</h5>
-  <p>
-    Lei Yuan, Chenghe Wang, Jianhao Wang, <strong>Fuxiang Zhang</strong>, Feng Chen, Cong Guan, Zongzhang Zhang, Chongjie Zhang, Yang Yu<br>
-    <em>International Joint Conference on Artificial Intelligence (IJCAI)</em>, 2022<br>
-    <span class="links"><a href="https://www.ijcai.org/proceedings/2022/0085.pdf">[Paper]</a> <a href="https://github.com/DrZero0/MACC">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Towards Deployment-Efficient and Collision-Free Multi-Agent Path Finding (Student Abstract)</h5>
-  <p>
-    Feng Chen, Chenghe Wang, <strong>Fuxiang Zhang</strong>, Haotian Ding, Qiyu Zhong, Shi Pu, Zongzhang Zhang<br>
-    <em>AAAI Conference on Artificial Intelligence (AAAI), Student Abstract</em>, 2023<br>
-    <span class="links"><a href="https://ojs.aaai.org/index.php/AAAI/article/view/26951/26723&ved=2ahUKEwifk-qf5_aPAxUuzzgGHU3fK4QQFnoECBsQAQ&usg=AOvVaw2x8XqbOXf0TZWFq6JpS7ST">[Paper]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Multi-Agent Incentive Communication via Decentralized Teammate Modeling</h5>
-  <p>
-    Lei Yuan*, Jianhao Wang*, <strong>Fuxiang Zhang*</strong>, Chenghe Wang, Zongzhang Zhang, Yang Yu, and Chongjie Zhang<br>
-    <em>AAAI Conference on Artificial Intelligence (AAAI)</em>, 2022<br>
-    <span class="links"><a href="https://cdn.aaai.org/ojs/21179/21179-13-25192-1-2-20220628.pdf">[Paper]</a> <a href="https://github.com/mansicer/MAIC">[Code]</a></span>
-  </p>
-</div>
-
-<h3>Journal Papers</h3>
-<div class="publication-item">
-  <h5>Improving Sample Efficiency of Reinforcement Learning with Background Knowledge from Large Language Models</h5>
-  <p>
-    <strong>Fuxiang Zhang</strong>, Junyou Li, Yi-Chen Li, Zongzhang Zhang, Yang Yu, Deheng Ye<br>
-    <em>IEEE Transactions on Neural Networks and Learning Systems (TNNLS)</em>, 2025<br>
-    <span class="links"><a href="https://arxiv.org/abs/2407.03964">[Paper]</a> <a href="https://github.com/mansicer/background-knowledge-rl">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Generalizable Multi-Modal Adversarial Imitation Learning for Non-Stationary Dynamics</h5>
-  <p>
-    Yi-Chen Li, Ningjing Chao, Zongzhang Zhang, <strong>Fuxiang Zhang</strong>, Lei Yuan, Yang Yu<br>
-    <em>IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)</em>, 2025<br>
-    <span class="links"><a href="https://ieeexplore.ieee.org/document/10930709">[Paper]</a> <a href="https://github.com/LAMDA-RL/GMAIL">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Multiagent Continual Coordination via Progressive Task Contextualization</h5>
-  <p>
-    Lei Yuan, Lihe Li, Ziqian Zhang, <strong>Fuxiang Zhang</strong>, Cong Guan, Yang Yu<br>
-    <em>IEEE Transactions on Neural Networks and Learning Systems (TNNLS)</em>, 2025<br>
-    <span class="links"><a href="https://arxiv.org/abs/2305.13937">[Paper]</a> <a href="https://github.com/lilh76/MACPro">[Code]</a></span>
-  </p>
-</div>
-
-<div class="publication-item">
-  <h5>Model Gradient: Unified Model and Policy Learning in Model-based Reinforcement Learning</h5>
-  <p>
-    Chengxing Jia*, <strong>Fuxiang Zhang*</strong>, Tian Xu, Jing-Cheng Pang, Zongzhang Zhang, and Yang Yu<br>
-    <em>Frontiers of Computer Science</em>, 2024<br>
-    <span class="links"><a href="https://link.springer.com/article/10.1007/s11704-023-3150-5">[Paper]</a></span>
-  </p>
-</div>
-
-<p><em>* denotes equal contribution</em></p>
-</div>
-</div>
-
-<footer>
-    <p style="text-align: center; margin-top: 30px; color: #777;">&copy; 2025 Fuxiang Zhang</p>
-</footer>
-
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+  <noscript><div class="noscript">This conversational view needs JavaScript. Please enable it or <a href="/reading/">use reading mode</a>.</div></noscript>
 </body>
 </html>

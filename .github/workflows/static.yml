@@ -1,8 +1,8 @@
-name: Deploy homepage and vibe to Pages
+name: Deploy terminal and reading modes to Pages
 
 on:
   push:
-    branches: ["main", "feat/terminal-homepage"]
+    branches: ["main", "reading-mode"]
   workflow_dispatch:
 
 permissions:
@@ -17,16 +17,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout original homepage
+      - name: Checkout reading homepage
         uses: actions/checkout@v5
         with:
-          ref: main
-          path: production
+          ref: reading-mode
+          path: reading
           persist-credentials: false
       - name: Checkout terminal homepage
         uses: actions/checkout@v5
         with:
-          ref: feat/terminal-homepage
+          ref: main
           path: terminal
           persist-credentials: false
       - name: Set up Node
@@ -46,13 +46,14 @@ jobs:
       - name: Assemble complete site
         run: |
           mkdir -p _site
-          rsync -a --exclude='/.git/' --exclude='/.github/' --exclude='/vibe/' production/ _site/
-          mkdir -p _site/vibe
-          cp -a terminal/dist/. _site/vibe/
+          cp -a terminal/dist/. _site/
+          mkdir -p _site/reading
+          rsync -a --exclude='/.git/' --exclude='/.github/' reading/ _site/reading/
           touch _site/.nojekyll
           test -f _site/index.html
           test -f _site/vibe/index.html
-          test -f _site/vibe/data/site.md
+          test -f _site/reading/index.html
+          test -f _site/data/site.md
       - name: Upload complete site
         uses: actions/upload-pages-artifact@v5
         with:
