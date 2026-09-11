@@ -336,6 +336,8 @@ Deployment requires a Cloudflare account that supports SQLite-backed Durable Obj
 
 ## Tests
 
+`.github/workflows/ci.yml` runs type checking and the full test suite for every pull request targeting `main`, and also supports manual runs. The `Type check and tests` job validates the proposed merge on Node.js 22 without deployment credentials. New commits cancel older CI runs for the same pull request. Requiring this check before merging is a separate repository branch-rule setting.
+
 `npm test` builds the project and runs `tests/` with Node's built-in test runner:
 
 | File | Covers |
