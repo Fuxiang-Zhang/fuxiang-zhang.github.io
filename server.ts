@@ -1,3 +1,4 @@
+import { contextMode } from './chat/context.js';
 import http from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -42,6 +43,7 @@ export function createServer(publicRoot = root) {
       site: await site,
       openaiKey: process.env.OPENAI_API_KEY || undefined,
       model: process.env.OPENAI_MODEL || undefined,
+      contextMode: contextMode(process.env.CHAT_CONTEXT_MODE),
       allowedOrigins: [`http://${host}`],
       store,
       perHour: 200,

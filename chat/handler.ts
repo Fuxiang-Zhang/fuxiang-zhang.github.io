@@ -9,7 +9,9 @@ import { mockReply } from '../src/chat.js';
 import { MAX_MESSAGE, MAX_REPLY, MAX_HISTORY, MAX_HISTORY_CHARS, MAX_BODY, isRecord, type ChatReply, type ChatStreamEvent, type ChatRequest, type ChatStatus, type ChatTurn, type SiteData } from '../src/types.js';
 import { budgetStatus, checkClientLimit, readUsage, recordUsage, secondsUntilReset, type CounterStore, type Usage } from './limits.js';
 import { askModel, DEFAULT_MODEL, ModelReplyError } from './openai.js';
-import { buildInstructions, promptCacheKey } from './prompt.js';
+import { stableInstructions, dynamicInstructions, promptCacheKey } from './prompt.js';
+import { contextMode, type ContextMode } from './context.js';
+import { preloadPaperIds, getPapers } from './papers.js';
 import { chatDeadline } from '../src/chat-deadline.js';
 
 export interface ChatEnv {
@@ -19,6 +21,7 @@ export interface ChatEnv {
   /** OpenAI API key; when absent every reply is the mock. */
   openaiKey?: string;
   model?: string;
+  contextMode?: ContextMode;
   /** Exact origins allowed to call the endpoint from a browser. */
   allowedOrigins: string[];
   /** Counter store for limits and the usage ledger; omit to disable both (local development). */
@@ -113,6 +116,9 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
 
   const paper = parsed.paperId && env.site.publications.some(paper => paper.id === parsed.paperId) ? parsed.paperId : null;
   const turns: ChatTurn[] = [...(parsed.history ?? []), { role: 'user', text: parsed.message }];
+  const mode = contextMode(env.contextMode);
+  const ids = mode === 'selective' ? preloadPaperIds(env.site, parsed.message, paper) : [];
+  const dynamic = dynamicInstructions(env.site, paper, now) + (ids.length ? `\n\n# Preloaded publication details\n${JSON.stringify(getPapers(env.site, ids))}` : '');
   const cancellation = new AbortController();
   const deadline = chatDeadline(AbortSignal.any([request.signal, cancellation.signal]));
   const encoder = new TextEncoder();
@@ -125,8 +131,9 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
       const task = (async () => {
         try {
           const reply = await askModel({
-            apiKey: env.openaiKey!, model: env.model, instructions: buildInstructions(env.site, paper, now), turns,
-            cacheKey: promptCacheKey(env.site, env.model ?? DEFAULT_MODEL),
+            apiKey: env.openaiKey!, model: env.model, instructions: stableInstructions(env.site, mode), dynamic, turns,
+            paperSite: mode === 'selective' ? env.site : undefined,
+            cacheKey: promptCacheKey(env.site, env.model ?? DEFAULT_MODEL, mode),
             signal: deadline.signal, onDelta: text => send({ type: 'delta', text }),
           });
           const usage = await accountUsage(env, { requests: 1, ...reply.usage }, now, reply.id);

@@ -79,7 +79,7 @@ test('the daily ledger sums tokens per UTC day and rejects corrupt records', asy
   await recordUsage(store, { requests: 1, input: 5000, cached: 4000, output: 300, total: 5300 }, now);
   await recordUsage(store, { errors: 1 }, now);
   const day = await recordUsage(store, { requests: 1, input: 5100, cached: 4000, output: 200, total: 5300 }, now);
-  assert.deepEqual(day, { requests: 2, input: 10100, cached: 8000, output: 500, reasoning: 0, total: 10600, errors: 1 });
+  assert.deepEqual(day, { cacheWrite: 0, modelCalls: 0, incompleteUsage: 0, requests: 2, input: 10100, cached: 8000, output: 500, reasoning: 0, total: 10600, errors: 1 });
   assert.equal(usageKey(now), 'usage:2026-09-05');
   assert.deepEqual(budgetStatus(day, 10_000, now), { used: 10600, limit: 10_000, exhausted: true, resetsAt: '2026-09-06T00:00:00.000Z' });
   assert.equal(secondsUntilReset(now), 60);
@@ -193,7 +193,7 @@ test('provider usage is recorded once for successful, incomplete, refused and em
     else await assert.rejects(readChatStream(response), /unavailable/);
   }
   assert.equal(calls, 4);
-  assert.deepEqual(await readUsage(store), { requests: 1, errors: 3, input: 400, cached: 160, output: 80, reasoning: 32, total: 480 });
+  assert.deepEqual(await readUsage(store), { cacheWrite: 0, modelCalls: 4, incompleteUsage: 0, requests: 1, errors: 3, input: 400, cached: 160, output: 80, reasoning: 32, total: 480 });
 });
 
 test('ledger outages fail closed with a CORS-enabled service error', async t => {

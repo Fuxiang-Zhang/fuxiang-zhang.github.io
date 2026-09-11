@@ -1,3 +1,4 @@
+import { contextMode } from '../chat/context.js';
 /*
  * Cloudflare Worker entry point. The site data is bundled at deploy time, so
  * the worker answers from the same content as the published homepage.
@@ -14,6 +15,7 @@ export { ChatCounters } from './counters.js';
 interface WorkerEnv {
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
+  CHAT_CONTEXT_MODE?: string;
   /** Comma-separated list of origins allowed to call the API. */
   ALLOWED_ORIGINS?: string;
   RATE_PER_HOUR?: string;
@@ -35,6 +37,7 @@ export default {
       waitUntil: task => ctx.waitUntil(task),
       openaiKey: env.OPENAI_API_KEY,
       model: env.OPENAI_MODEL,
+      contextMode: contextMode(env.CHAT_CONTEXT_MODE),
       allowedOrigins: (env.ALLOWED_ORIGINS ?? '').split(',').map(origin => origin.trim()).filter(Boolean),
       store: new DurableCounterStore(env.CHAT_COUNTERS),
       perHour: numericSetting(env.RATE_PER_HOUR, DEFAULT_PER_HOUR),

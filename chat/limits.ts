@@ -44,11 +44,14 @@ export async function checkClientLimit(store: CounterStore, ip: string, perHour:
 
 /* Daily token ledger: one JSON record per UTC day, which doubles as the usage report. */
 export interface Usage {
-  /** Successful model calls. */
+  /** Successfully answered user questions, independent of tool rounds. */
   requests: number;
   input: number;
   /** Input tokens served from the provider's prompt cache (already included in `input`). */
   cached: number;
+  cacheWrite: number;
+  modelCalls: number;
+  incompleteUsage: number;
   output: number;
   /** Reasoning tokens (already included in `output`), which the model spends before writing the visible answer. */
   reasoning: number;
@@ -57,7 +60,7 @@ export interface Usage {
   /** Model calls that failed, including failures with charged tokens. */
   errors: number;
 }
-export const emptyUsage = (): Usage => ({ requests: 0, input: 0, cached: 0, output: 0, reasoning: 0, total: 0, errors: 0 });
+export const emptyUsage = (): Usage => ({ requests: 0, cacheWrite: 0, modelCalls: 0, incompleteUsage: 0, input: 0, cached: 0, output: 0, reasoning: 0, total: 0, errors: 0 });
 export const usageKey = (now = Date.now()): string => `usage:${new Date(now).toISOString().slice(0, 10)}`;
 
 export async function readUsage(store: CounterStore, now = Date.now()): Promise<Usage> {

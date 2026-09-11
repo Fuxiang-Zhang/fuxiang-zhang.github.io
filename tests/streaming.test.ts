@@ -36,7 +36,8 @@ test('live deltas reach the client before provider completion and usage is commi
     assert.equal(body.stream, true);
     assert.equal(body.max_output_tokens, 4096);
     assert.match(body.prompt_cache_key, /^homepage-[0-9a-f]{8}-/);
-    assert.equal(body.prompt_cache_retention, '24h');
+    assert.deepEqual(body.prompt_cache_options, { mode: 'explicit', ttl: '30m' });
+    assert.deepEqual(body.input[0].content[0].prompt_cache_breakpoint, { mode: 'explicit' });
     return provider.response;
   });
   const store = new MemoryStore();
