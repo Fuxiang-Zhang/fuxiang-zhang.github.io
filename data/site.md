@@ -18,14 +18,14 @@ I am a Ph.D. student at [Nanyang Technological University](https://www.ntu.edu.s
 
 My research focuses on **reinforcement learning for reasoning and agentic LLMs**, spanning post-training, test-time preference alignment, and multi-agent learning. More broadly, I am interested in improving the sample efficiency and generalization of reinforcement learning agents.
 
-[Explore my research](#research), type [/help](#help), or ask a question below.
-
 ### News
 
 :::feed{ref="news" limit="5"}
 :::
 
 [View all news →](#news)
+
+[Explore my research](#research), type [/help](#help), or ask a question below.
 
 ## News
 Command: /news
