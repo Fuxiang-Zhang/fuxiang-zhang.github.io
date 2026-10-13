@@ -259,6 +259,39 @@ Summary: Print academic service and honors
 Id: publications
 
 :::publication
+Title: Negative-Only Policy Optimization for One-Sided Verifiable Rewards
+Id: negative-only-policy-optimization
+Authors: Jiacheng Xu, Shuo He, Fuxiang Zhang, Chaojie Wang, Bo An
+Venue: Conference on Neural Information Processing Systems (NeurIPS), Spotlight
+Venue short: NeurIPS (Spotlight)
+Year: 2026
+Topic: Large Language Models
+Paper: https://neurips.cc/virtual/2026/poster/152610
+:::
+
+:::publication
+Title: Backtracking with Linear-in-Depth Search-Space Growth: Width-Limited Tree Search for Large Language Models
+Id: width-limited-tree-search
+Authors: Jiacheng Xu, Fuxiang Zhang, Chaojie Wang, Bo An
+Venue: Conference on Neural Information Processing Systems (NeurIPS), Spotlight
+Venue short: NeurIPS (Spotlight)
+Year: 2026
+Topic: Large Language Models
+Paper: https://neurips.cc/virtual/2026/poster/155253
+:::
+
+:::publication
+Title: Two-Stage Reinforcement Learning for Sound and Adversarial Test Generation in Code LLMs
+Id: two-stage-test-generation
+Authors: Jiacheng Xu, Wentao Zhang, Zhiyi Lyu, Fuxiang Zhang, Chaojie Wang, Yang Liu, Bo An
+Venue: Findings of the Association for Computational Linguistics: EMNLP
+Venue short: EMNLP Findings
+Year: 2026
+Topic: Large Language Models
+Paper: https://arxiv.org/abs/2609.03955
+:::
+
+:::publication
 Title: SkyReels-V4: Multi-modal Video-Audio Generation, Inpainting and Editing Model
 Id: skyreels-v4
 Authors: Guibin Chen, Dixuan Lin, Jiangping Yang, Youqiang Zhang, Zhengcong Fei, Debang Li, Sheng Chen, Chaofeng Ao, Nuo Pang, Yiming Wang, Yikun Dou, Zheng Chen, Mingyuan Fan, Tuanhui Li, Mingshan Chang, Hao Zhang, Xiaopeng Sun, Jingtao Xu, Yuqiang Xie, Jiahua Wang, Zhiheng Xu, Weiming Xiong, Yuzhe Jin, Baoxuan Gu, Binjie Mao, Yunjie Yu, Jujie He, Yuhao Feng, Shiwen Tu, Chaojie Wang, Rui Yan, Wei Shen, Jingchen Wu, Peng Zhao, Xuanyue Zhong, Zhuangzhuang Liu, Kaifei Wang, Fuxiang Zhang, Weikai Xu, Wenyan Liu, Binglu Zhang, Yu Shen, Tianhui Xiong, Bin Peng, Liang Zeng, Xuchen Song, Haoxiang Guo, Peiyu Wang, Max W. Y. Lam, Chien-Hung Liu, Yahui Zhou
@@ -275,8 +308,8 @@ SkyReels V4 is a unified multi modal video foundation model for joint video audi
 Title: Dr. MAS: Stable Reinforcement Learning for Multi-Agent LLM Systems
 Id: dr-mas
 Authors: Lang Feng, Longtao Zheng, Shuo He, Fuxiang Zhang, Bo An
-Venue: ICLR Workshop on Multi-Agent Learning and Its Opportunities in the Era of Generative AI (MALGAI)
-Venue short: ICLR MALGAI Workshop
+Venue: Conference on Neural Information Processing Systems (NeurIPS), Poster
+Venue short: NeurIPS (Poster)
 Year: 2026
 Topic: Multi-Agent RL
 Paper: https://arxiv.org/abs/2602.08847

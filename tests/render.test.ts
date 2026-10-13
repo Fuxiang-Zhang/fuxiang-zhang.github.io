@@ -19,9 +19,15 @@ test('long author lists preserve order, owner credit and equal-contribution mark
   assert.equal(compactAuthors('A, B, C, D, E, F, G'), 'A, B, C, D, E, F, et al.');
 });
 
-test('workshop cards name their parent conference and show the year separately', () => {
+test('publication cards retain venue distinctions and show the year separately', () => {
   const view = createRenderer({ site, loadFailed: false });
-  for (const [id, label] of [['derl-swe', 'ICML DL4C Workshop'], ['dr-mas', 'ICLR MALGAI Workshop']]) {
+  for (const [id, label] of [
+    ['derl-swe', 'ICML DL4C Workshop'],
+    ['dr-mas', 'NeurIPS (Poster)'],
+    ['negative-only-policy-optimization', 'NeurIPS (Spotlight)'],
+    ['width-limited-tree-search', 'NeurIPS (Spotlight)'],
+    ['two-stage-test-generation', 'EMNLP Findings'],
+  ]) {
     const html = view.message({ id: 'test', role: 'assistant', text: `[[paper:${id}]]`,
       prompt: 'q', paperId: null, state: 'done', mode: 'live' });
     assert.ok(html.includes(`<span class="paper-venue-tag">${label}</span><span class="paper-year">2026</span>`));
