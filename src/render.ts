@@ -5,7 +5,7 @@ import { markdown, renderInline } from './markdown-engine.js';
 import { parseBlocks } from './markdown.js';
 import { nameBanner } from './banner.js';
 import {
-  cardsOf, sectionId, parseLinks,
+  cardsOf, sectionId, parseLinks, walk,
   type Content, type Link, type Node as SiteNode, type Publication, type SectionId, type SiteData, type Message,
 } from './types.js';
 
@@ -54,6 +54,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   const commands = buildCommands(site);
   const papersById = new Map(publications.map(paper => [paper.id, paper]));
   const sectionsById = new Map(site.sections.map(section => [sectionId(section), section]));
+  const feedSources = new Set([...walk(site.sections)].filter(node => node.kind === 'feed').map(node => node.fields.ref));
   const getPaper = (id: string) => papersById.get(id);
   const sectionOf = (id: string) => sectionsById.get(id);
 
@@ -103,7 +104,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       case 'profile': return profileHeader();
       case 'feed': {
         const list = sectionOf(node.fields.ref)?.body[0];
-        return list ? renderNode({ ...list, body: list.body.slice(0, Number(node.fields.limit)) }) : '';
+        return list ? `<div class="feed-content">${renderNode({ ...list, body: list.body.slice(0, Number(node.fields.limit)) })}</div>` : '';
       }
       case 'paper': {
         const paper = getPaper(node.fields.ref);
@@ -135,7 +136,8 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
   function sectionOpening(section: SiteNode): string {
     if (loadFailed) return loadError();
     const papers = cardsFor(section);
-    return `<h2 class="section-title">${inline(section.title)}</h2>${renderNodes(section.body)}${papers
+    const body = renderNodes(section.body);
+    return `<h2 class="section-title">${inline(section.title)}</h2>${feedSources.has(sectionId(section)) ? `<div class="feed-content">${body}</div>` : body}${papers
       ? `<div class="paper-list">${papersList(papers)}</div>${equalNote(papers)}` : ''}`;
   }
   function helpContent() {

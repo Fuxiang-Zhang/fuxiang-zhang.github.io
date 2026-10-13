@@ -31,8 +31,8 @@ My research focuses on **reinforcement learning for reasoning and agentic LLMs**
 Command: /news
 Summary: Print all news and paper acceptances
 
-- Sep 25, 2026 — **NeurIPS 2026**: [Negative-Only](#card/negative-only-policy-optimization) & [Width-Limited Search](#card/width-limited-tree-search) (Spotlight), [Dr. MAS](#card/dr-mas) (Poster).
-- Aug 21, 2026 — **EMNLP 2026 Findings**: [Two-Stage Test Generation](#card/two-stage-test-generation) accepted.
+- Sep 25, 2026 · **NeurIPS 2026**: [Negative-Only](#card/negative-only-policy-optimization) & [Width-Limited Search](#card/width-limited-tree-search) (Spotlight), [Dr. MAS](#card/dr-mas) (Poster).
+- Aug 21, 2026 · **EMNLP 2026 Findings**: [Two-Stage Test Generation](#card/two-stage-test-generation) accepted.
 
 ## Research
 Command: /research

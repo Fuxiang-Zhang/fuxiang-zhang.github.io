@@ -130,6 +130,9 @@ h3::before { content: '### '; color: var(--faint); }
 .detail-ask { margin-top: 1em; }
 .cv-row { margin: 1.5em 0; }
 .cv-list { margin: 1.5em 0; padding-left: 2ch; list-style-type: '- '; }
+.feed-content > .cv-list { margin: .5em 0; padding-left: 0; list-style: none; }
+.feed-content > .cv-list > .cv-row { margin: 0; }
+.feed-content > .cv-list > .cv-row > p { margin: 0; }
 .cv-heading { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 0 2ch; align-items: baseline; }
 .cv-heading > :is(h3,h4,h5,h6,strong) { margin: 0; min-width: 0; }
 .cv-heading > strong { font: inherit; font-weight: 700; }
