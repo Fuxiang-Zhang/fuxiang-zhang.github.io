@@ -192,6 +192,8 @@ A closing paragraph, outside the card.
 - A standalone `[[paper:id]]` paragraph inserts a card without a description. Authored cards have no chat-specific three-card limit.
 - `profile` is an empty component for the profile display.
 - `feed{ref="news" limit="5"}` previews the first five records from the referenced command section, which must contain one list. The component is empty, and feed sources cannot contain other feeds. Bio uses it to show recent news without duplicating announcements; an authored `[View all news](#news)` link opens the full list. Add new announcements at the top of the News list, with one record per conference and paper links inside that record.
+
+News dates must include the day, using `Period: Sep 25, 2026`. Use the date explicitly provided by the user; otherwise default to the date of the conversation in the user's timezone (Asia/Singapore). Keep announcements in descending date order and synchronize the classic reading mode's `news.js` when updating news.
 - `publication` defines a reusable publication in a data section, as below.
 
 Paper, profile and publication components still use `:::` fences; a closing fence must be at least as long as its opener. All components must close explicitly. Unknown components, malformed options and missing references fail validation with a source line. Components belong in ordinary content or list items, outside blockquotes and tables. Code blocks treat component syntax literally. GitHub renders the details/summary structure directly. Paper, profile and publication components remain project-specific extensions: use `npm run dev` for the complete homepage preview.
