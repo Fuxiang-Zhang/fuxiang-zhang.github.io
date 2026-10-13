@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News | Fuxiang Zhang</title>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YN1PYBS8J3"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-YN1PYBS8J3');
+  </script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px auto;
+      padding: 0 20px;
+      background: #f5f7fa;
+      color: #333;
+      max-width: 1200px;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .left-panel {
+      flex: 1;
+      min-width: 300px;
+      padding-right: 40px;
+      text-align: center;
+    }
+    .right-panel {
+      flex: 3;
+      min-width: 600px;
+    }
+    .profile-pic {
+      width: 100%;
+      max-width: 180px;
+      border-radius: 10px;
+    }
+    h1, h2, h3 {
+      color: #2c3e50;
+    }
+    h1 {
+        font-size: 2.2em;
+    }
+    h2 {
+      margin: 42px 0 22px;
+      font-size: 1.9em;
+      font-weight: 700;
+      color: #1c2e46;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      letter-spacing: 0.01em;
+    }
+    h2::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(41, 128, 185, 0.4), rgba(41, 128, 185, 0));
+      border-radius: 1px;
+    }
+    h3 {
+      position: relative;
+      margin: 34px 0 18px;
+      font-size: 1.28em;
+      font-weight: 600;
+      color: #1f3d5e;
+      letter-spacing: 0.03em;
+    }
+    h3::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: -10px;
+      width: 64px;
+      height: 3px;
+      background: linear-gradient(90deg, #2980b9, #6bc4ff);
+      border-radius: 2px;
+    }
+    a {
+      color: #2980b9;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .links a {
+      margin-right: 10px;
+    }
+    .links .vibe-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin: 10px 0 0;
+      padding: 13px 18px;
+      border-radius: 12px;
+      background: linear-gradient(120deg, #6d28d9, #2454c6);
+      color: #fff;
+      font-size: 0.95em;
+      font-weight: 700;
+      line-height: 1.4;
+      box-shadow: 0 6px 18px rgba(109, 40, 217, 0.25);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+    .links .vibe-link:hover {
+      text-decoration: none;
+      transform: translateY(-2px);
+      box-shadow: 0 9px 24px rgba(109, 40, 217, 0.35);
+    }
+    .links .vibe-link:focus-visible {
+      outline: 3px solid #6d28d9;
+      outline-offset: 4px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .links .vibe-link {
+        transition: none;
+      }
+      .links .vibe-link:hover {
+        transform: none;
+      }
+    }
+    .publication-item {
+        margin-bottom: 1.5em;
+        line-height: 1.4;
+    }
+    .publication-item h5 {
+        margin: 0 0 0.2em 0;
+        font-size: 1.1em;
+    }
+    .publication-item h5 a {
+        color: #333;
+    }
+    .publication-item p {
+        margin: 0;
+        color: #555;
+    }
+    .publication-item .links a {
+        margin-right: 8px;
+        font-size: 0.9em;
+    }
+    .education-item, .internship-item {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .news-feed { padding-left: 1.25em; }
+    .news-feed > li { margin: 1em 0; }
+    .news-feed p { margin: .5em 0; }
+    .news-feed li li { margin: .35em 0; }
+    .news-year { color: #777; font-size: .9em; margin-left: .5em; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="left-panel">
+    <img src="assets/Photo.JPG" alt="Fuxiang Zhang" class="profile-pic"/>
+    <h1>Fuxiang Zhang</h1>
+
+    <div class="links">
+      <p><a href="mailto:zfx.agi@gmail.com">Email</a></p>
+      <p><a href="https://github.com/mansicer">GitHub</a></p>
+      <p><a href="https://scholar.google.com/citations?user=GZRrWXAAAAAJ">Google Scholar</a></p>
+      <p><a href="https://www.linkedin.com/in/fuxiang-zhang-2b7bb418a/">Linkedin</a></p>
+      <p><a class="vibe-link" href="/"><span aria-hidden="true">✦</span> Switch to Terminal Mode <span aria-hidden="true">→</span></a></p>
+    </div>
+  </div>
+
+<div class="right-panel">
+<h2>News</h2>
+<p><a href="./">← Back to homepage</a></p>
+<ul class="news-feed" data-news-feed></ul>
+</div>
+</div>
+<footer>
+    <p style="text-align: center; margin-top: 30px; color: #777;">&copy; 2025 Fuxiang Zhang</p>
+</footer>
+
+<script type="module" src="news.js"></script>
+</body>
+</html>

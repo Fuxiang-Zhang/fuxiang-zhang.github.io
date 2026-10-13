@@ -149,6 +149,12 @@
         justify-content: space-between;
         margin-bottom: 10px;
     }
+
+    .news-feed { padding-left: 1.25em; }
+    .news-feed > li { margin: 1em 0; }
+    .news-feed p { margin: .5em 0; }
+    .news-feed li li { margin: .35em 0; }
+    .news-year { color: #777; font-size: .9em; margin-left: .5em; }
   </style>
 </head>
 <body>
@@ -175,6 +181,13 @@
 <p>
   I obtained my Master's and Bachelor's degrees from Nanjing University. During my time at Nanjing University, I was a member of the <a href="http://www.lamda.nju.edu.cn/MainPage.ashx">LAMDA</a> group, in a reinforcement learning team led by Prof. <a href="https://www.lamda.nju.edu.cn/zhangzz/">Zongzhang Zhang</a>.
 </p>
+
+<section aria-labelledby="recent-news-heading">
+<h2 id="recent-news-heading">News</h2>
+<ul class="news-feed" data-news-feed data-news-limit="5"></ul>
+<p><a href="news.html">View all news →</a></p>
+<noscript><p>Enable JavaScript to view news announcements.</p></noscript>
+</section>
 
 <h2>Research Interests</h2>
 <p><em>Large Language Models, Reinforcement Learning, Multi-Agent Reinforcement Learning</em></p>
@@ -410,5 +423,6 @@
     <p style="text-align: center; margin-top: 30px; color: #777;">&copy; 2025 Fuxiang Zhang</p>
 </footer>
 
+<script type="module" src="news.js"></script>
 </body>
 </html>
