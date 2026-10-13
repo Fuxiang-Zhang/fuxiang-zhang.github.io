@@ -181,7 +181,7 @@ export function parseSiteMarkdown(source: string): SiteData {
     const command = commandOf(section);
     if (!command && !section.fields.id) fail(section, 'Section needs a Command or Id.');
     const id = sectionId(section);
-    if (!slug(id) || ['main', 'paper', 'help'].includes(id)) fail(section, `Invalid or reserved section Id: ${id}.`);
+    if (!slug(id) || ['main', 'paper', 'card', 'help'].includes(id)) fail(section, `Invalid or reserved section Id: ${id}.`);
     if (ids.has(id)) fail(section, `Repeated section id: ${id}.`);
     ids.add(id);
     if (command) {

@@ -65,6 +65,7 @@ export function resolveRoute(hash: string, site: SiteData): Content | null {
   const [name, id] = hash.replace(/^#/, '').split('/');
   if (name === 'main') return null; // Native skip-to-content anchor.
   if (name === 'paper') return { kind: 'paper', paperId: id ?? '' };
+  if (name === 'card') return { kind: 'paper', paperId: id ?? '', preview: true };
   if (name === 'help') return { kind: 'help' };
   const ids = sectionIds(site);
   if (ids.includes(name)) return { kind: 'preset', topic: name };

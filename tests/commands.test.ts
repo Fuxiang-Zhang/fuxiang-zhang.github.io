@@ -59,6 +59,7 @@ test('legacy publication hashes, actual ids, paper details and skip links resolv
   assert.equal(resolveRoute('#main', site), null);
   assert.deepEqual(resolveRoute('#help', site), { kind: 'help' });
   assert.deepEqual(resolveRoute('#paper/rear', site), { kind: 'paper', paperId: 'rear' });
+  assert.deepEqual(resolveRoute('#card/dr-mas', site), { kind: 'paper', paperId: 'dr-mas', preview: true });
   const changed = { ...site, sections: site.sections.map(section => section.fields.command === '/papers'
     ? { ...section, fields: { ...section.fields, id: 'library' } } : section) };
   assert.deepEqual(resolveRoute('#publications', changed), { kind: 'preset', topic: 'library' });

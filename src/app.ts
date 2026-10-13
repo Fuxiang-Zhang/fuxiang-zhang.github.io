@@ -451,6 +451,12 @@ document.addEventListener('click', async event => {
   const authoredLink = target?.closest<HTMLAnchorElement>('a[href^="#"]');
   if (authoredLink && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
     const hash = authoredLink.getAttribute('href');
+    if (hash?.startsWith('#card/')) {
+      event.preventDefault();
+      const content = resolveRoute(hash, state.site);
+      if (content?.kind === 'paper' && getPaper(content.paperId) && !holdWhilePrinting()) show(content);
+      return;
+    }
     const command = pageCommands.find(c => hash === `#${c.topic ?? c.action}`);
     if (command) { event.preventDefault(); executeCommand(command); return; }
   }

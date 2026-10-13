@@ -50,6 +50,16 @@ type View = ReturnType<typeof createRenderer>;
 const contentHTML = (view: View, content: Content) => view.message({ id: 'content', role: 'content', content });
 const presetHTML = (view: View, topic: string) => contentHTML(view, { kind: 'preset', topic });
 
+test('paper preview routes render an interactive card without the full abstract', () => {
+  const paper = site.publications.find(p => p.id === 'dr-mas')!;
+  const html = contentHTML(renderer, { kind: 'paper', paperId: paper.id, preview: true });
+  assert.ok(html.includes('<article class="paper">'));
+  assert.ok(html.includes('data-paper="dr-mas"'));
+  assert.ok(html.includes('data-ask="dr-mas"'));
+  assert.ok(html.includes('NeurIPS (Poster)'));
+  assert.ok(!textContent(html).includes(paper.abstract!));
+});
+
 test('Bio previews only the first five news records while the news route retains every record', () => {
   const records = Array.from({ length: 7 }, (_, i) => `- **Announcement ${i + 1}**\n\n  [Paper ${i + 1}](#paper/dr-mas).`).join('\n\n');
   const changed = parseSiteMarkdown(site.source.replace(/^## News\n[\s\S]*?(?=\n## Research)/m,

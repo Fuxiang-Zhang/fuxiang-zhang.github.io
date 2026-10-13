@@ -106,7 +106,7 @@ export interface AssistantMessage {
 export type Content =
   | { kind: 'preset'; topic: SectionId }
   | { kind: 'help' }
-  | { kind: 'paper'; paperId: string };
+  | { kind: 'paper'; paperId: string; preview?: boolean };
 export interface ContentMessage { id: string; role: 'content'; content: Content }
 export type Message = { id: string; role: 'user'; text: string } | AssistantMessage | ContentMessage;
 /** One transcript with an optional paper context for the next question. */

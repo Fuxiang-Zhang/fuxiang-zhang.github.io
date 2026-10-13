@@ -151,7 +151,7 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
       case 'help': return helpContent();
       case 'paper': {
         const paper = getPaper(content.paperId);
-        return paper ? paperDetail(paper) : `<p class="empty-results">${t('noResults')}</p>`;
+        return paper ? (content.preview ? paperCard(paper) : paperDetail(paper)) : `<p class="empty-results">${t('noResults')}</p>`;
       }
     }
   }
