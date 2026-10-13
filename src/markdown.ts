@@ -98,7 +98,7 @@ export function parseBlocks(source: string): Node[] {
         fieldsFrom(component);
         result.push(component);
       } else if (token.type.startsWith('container_') && token.nesting === 1) {
-        const kind = token.type.slice(10, -5) as 'paper' | 'publication' | 'profile';
+        const kind = token.type.slice(10, -5) as 'paper' | 'publication' | 'profile' | 'feed';
         const info = token.info.trim();
         const component = node(kind, line);
         if (!token.map || !/^\s*:{3,}\s*$/.test(lines[token.map[1]] ?? '')) fail(component, `Unclosed ${kind} component.`);
@@ -106,6 +106,11 @@ export function parseBlocks(source: string): Node[] {
           const match = /^paper\{ref="([a-z0-9][a-z0-9-]*)"\}$/.exec(info);
           if (!match) fail(component, 'Use :::paper{ref="paper-id"}.');
           component.fields.ref = match![1];
+        } else if (kind === 'feed') {
+          const match = /^feed\{ref="([a-z0-9][a-z0-9-]*)" limit="([1-9]\d*)"\}$/.exec(info);
+          if (!match) fail(component, 'Use :::feed{ref="section-id" limit="5"}.');
+          component.fields.ref = match![1];
+          component.fields.limit = match![2];
         } else if (info !== kind) fail(component, `Unsupported ${kind} component options.`);
         index++;
         const contents = blocks(true);
@@ -200,7 +205,7 @@ export function parseSiteMarkdown(source: string): SiteData {
         if (!slug(id)) fail(record, 'Invalid publication Id.');
         const year = Number(required(record, 'year'));
         if (!Number.isInteger(year)) fail(record, 'Invalid Year.');
-        if ([...walk(record.body)].some(n => ['publication', 'profile', 'collapse'].includes(n.kind))) fail(record, 'Publication abstracts accept standard Markdown and paper references.');
+        if ([...walk(record.body)].some(n => ['publication', 'profile', 'collapse', 'feed'].includes(n.kind))) fail(record, 'Publication abstracts accept standard Markdown and paper references.');
         if (publications.some(p => p.id === id)) fail(record, `Duplicate publication id: ${id}.`);
         for (const key of ['paper', 'code']) {
           const url = record.fields[key];
@@ -216,9 +221,9 @@ export function parseSiteMarkdown(source: string): SiteData {
       if (!commandOf(section)) fail(section, 'Section is neither a command nor a Cards source.');
       for (const block of walk(section.body)) {
         if (block.kind === 'publication') fail(block, 'Publication definitions belong in a Cards source.');
-        only(block, block.kind === 'paper' ? ['ref'] : ['role', 'location', 'period', 'links']);
+        only(block, block.kind === 'paper' ? ['ref'] : block.kind === 'feed' ? ['ref', 'limit'] : ['role', 'location', 'period', 'links']);
         if (block.kind === 'profile' && (block.body.length || Object.keys(block.fields).length)) fail(block, 'Profile component must be empty.');
-        if (block.kind === 'paper' && [...walk(block.body)].some(n => ['paper', 'publication', 'profile', 'collapse'].includes(n.kind))) fail(block, 'A paper description contains standard Markdown blocks only.');
+        if (block.kind === 'paper' && [...walk(block.body)].some(n => ['paper', 'publication', 'profile', 'collapse', 'feed'].includes(n.kind))) fail(block, 'A paper description contains standard Markdown blocks only.');
         if (block.kind === 'markdown' && block.blockType === 'paragraph' && /^(?:Id|Role|Location|Period|Links|Command|Summary|Cards):/m.test(block.text ?? '')) fail(block, 'Move metadata directly under its heading or list item.');
       }
     }

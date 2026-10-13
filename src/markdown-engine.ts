@@ -13,7 +13,7 @@ markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
   }
   return linkOpen ? linkOpen(tokens, index, options, env, self) : self.renderToken(tokens, index, options);
 };
-for (const name of ['paper', 'publication', 'profile']) {
+for (const name of ['paper', 'publication', 'profile', 'feed']) {
   markdown.use(container, name, { validate: (info: string) => new RegExp(`^${name}(?:\\s|\\{|$)`).test(info.trim()) });
 }
 markdown.use(detailsPlugin);

@@ -101,6 +101,10 @@ export function createRenderer({ site, loadFailed }: RenderContext) {
     switch (node.kind) {
       case 'markdown': return markdown.render(node.text ?? '', { references: node.references });
       case 'profile': return profileHeader();
+      case 'feed': {
+        const list = sectionOf(node.fields.ref)?.body[0];
+        return list ? renderNode({ ...list, body: list.body.slice(0, Number(node.fields.limit)) }) : '';
+      }
       case 'paper': {
         const paper = getPaper(node.fields.ref);
         return paper ? paperCard(paper, node.body.length ? node.body : undefined) : '';

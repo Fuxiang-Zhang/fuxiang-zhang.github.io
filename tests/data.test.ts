@@ -85,6 +85,23 @@ After the list.
   assert.equal(item.body[2].text, 'After the nested list.');
 });
 
+test('feed previews validate their source, limit and empty body', () => {
+  const feed = ':::feed{ref="updates" limit="5"}\n:::';
+  const source = sample.replace('First paragraph.', feed)
+    + '\n## Updates\nCommand: /updates\n\n- First announcement\n- Second announcement\n';
+  const parsed = parseSiteMarkdown(source);
+  assert.equal(parsed.sections[0].body.find(n => n.kind === 'feed')?.fields.limit, '5');
+  for (const invalid of [
+    source.replace('ref="updates"', 'ref="missing"'),
+    source.replace('limit="5"', 'limit="0"'),
+    source.replace('limit="5"', 'limit="1.5"'),
+    source.replace('limit="5"', 'limit="9007199254740992"'),
+    source.replace(feed, ':::feed{ref="updates" limit="5"}\nHidden prose.\n:::'),
+    source.replace('- First announcement\n- Second announcement', 'Ordinary paragraph.'),
+    source.replace('- First announcement', `- ${feed.replaceAll('\n', '\n  ')}`),
+  ]) assert.throws(() => parseSiteMarkdown(invalid), /Line \d+:/);
+});
+
 test('published education and work use records while service and awards remain headings', () => {
   for (const command of ['/education', '/work']) {
     const section = site.sections.find(s => s.fields.command === command)!;

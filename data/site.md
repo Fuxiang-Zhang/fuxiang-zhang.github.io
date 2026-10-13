@@ -20,6 +20,29 @@ My research focuses on **reinforcement learning for reasoning and agentic LLMs**
 
 [Explore my research](#research), type [/help](#help), or ask a question below.
 
+### News
+
+:::feed{ref="news" limit="5"}
+:::
+
+[View all news →](#news)
+
+## News
+Command: /news
+Summary: Print all news and paper acceptances
+
+- **Three papers accepted to NeurIPS 2026**
+  Period: 2026
+
+  - [Negative-Only Policy Optimization for One-Sided Verifiable Rewards](#paper/negative-only-policy-optimization) — **Spotlight**.
+  - [Backtracking with Linear-in-Depth Search-Space Growth: Width-Limited Tree Search for Large Language Models](#paper/width-limited-tree-search) — **Spotlight**.
+  - [Dr. MAS: Stable Reinforcement Learning for Multi-Agent LLM Systems](#paper/dr-mas) — **Poster**.
+
+- **One paper accepted to EMNLP 2026 Findings**
+  Period: 2026
+
+  [Two-Stage Reinforcement Learning for Sound and Adversarial Test Generation in Code LLMs](#paper/two-stage-test-generation) has been accepted to Findings of EMNLP 2026.
+
 ## Research
 Command: /research
 Summary: Print research interests and directions

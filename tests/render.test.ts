@@ -49,6 +49,22 @@ const renderer = createRenderer({ site, loadFailed: false });
 type View = ReturnType<typeof createRenderer>;
 const contentHTML = (view: View, content: Content) => view.message({ id: 'content', role: 'content', content });
 const presetHTML = (view: View, topic: string) => contentHTML(view, { kind: 'preset', topic });
+
+test('Bio previews only the first five news records while the news route retains every record', () => {
+  const records = Array.from({ length: 7 }, (_, i) => `- **Announcement ${i + 1}**\n\n  [Paper ${i + 1}](#paper/dr-mas).`).join('\n\n');
+  const changed = parseSiteMarkdown(site.source.replace(/^## News\n[\s\S]*?(?=\n## Research)/m,
+    `## News\nCommand: /news\nSummary: All announcements\n\n${records}\n`));
+  const view = createRenderer({ site: changed, loadFailed: false });
+  const bio = presetHTML(view, 'bio');
+  const news = presetHTML(view, 'news');
+  for (let i = 1; i <= 7; i++) {
+    assert.equal(bio.includes(`Announcement ${i}`), i <= 5);
+    assert.ok(news.includes(`Announcement ${i}`));
+  }
+  assert.ok(bio.includes('href="#news"'));
+  assert.ok(bio.includes('href="#paper/dr-mas"'));
+  assert.equal((bio.match(/Announcement 1/g) ?? []).length, 1);
+});
 const detailHTML = (view: View, id: string) => contentHTML(view, { kind: 'paper', paperId: id });
 const cardsHTML = (view: View, ids: string[]) => view.message({
   id: 'reply', role: 'assistant', text: ids.map(id => `[[paper:${id}]]`).join('\n'),

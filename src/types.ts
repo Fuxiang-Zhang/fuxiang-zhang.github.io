@@ -32,7 +32,7 @@ export interface Profile {
 
 /** Ordered authored blocks. Components are explicit; headings retain their depth. */
 export interface Node {
-  kind: 'heading' | 'item' | 'list' | 'collapse' | 'paper' | 'publication' | 'profile' | 'markdown';
+  kind: 'heading' | 'item' | 'list' | 'collapse' | 'paper' | 'publication' | 'profile' | 'feed' | 'markdown';
   title: string;
   fields: Record<string, string>;
   body: Node[];
@@ -134,7 +134,7 @@ export function parsePublications(value: unknown): Publication[] {
 }
 const isNode = (n: unknown): n is Node => isRecord(n)
   && isString(n.title) && typeof n.line === 'number'
-  && ['heading', 'item', 'list', 'collapse', 'paper', 'publication', 'profile', 'markdown'].includes(String(n.kind))
+  && ['heading', 'item', 'list', 'collapse', 'paper', 'publication', 'profile', 'feed', 'markdown'].includes(String(n.kind))
   && isRecord(n.fields) && Object.values(n.fields).every(isString)
   && Array.isArray(n.body) && n.body.every(isNode);
 const isProfile = (p: unknown): p is Profile => isRecord(p)
@@ -155,6 +155,18 @@ export function parseSiteData(value: unknown): SiteData {
   };
   for (const node of walk(site.sections)) {
     parseLinks(node.fields.links);
+    if (node.kind === 'feed') {
+      const section = site.sections.find(s => sectionId(s) === node.fields.ref);
+      if (!section || !commandOf(section) || section.body.length !== 1 || section.body[0].kind !== 'list') {
+        throw new Error(`Line ${node.line}: Feed must reference a command section containing one list.`);
+      }
+      if (!/^[1-9]\d*$/.test(node.fields.limit ?? '') || !Number.isSafeInteger(Number(node.fields.limit))) {
+        throw new Error(`Line ${node.line}: Feed limit must be a positive integer.`);
+      }
+      if (node.body.length || [...walk(section.body)].some(n => n.kind === 'feed')) {
+        throw new Error(`Line ${node.line}: Feed components must be empty and cannot reference another feed.`);
+      }
+    }
     if (node.kind === 'paper' && !ids.has(node.fields.ref)) {
       throw new Error(`Line ${node.line}: Unknown publication: ${node.fields.ref}.`);
     }

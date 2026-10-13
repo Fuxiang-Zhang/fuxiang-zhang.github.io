@@ -13,7 +13,7 @@ export function compactContext(site: SiteData): string {
   const contributions = new Map<string, Set<string>>();
   function render(nodes: Node[], path: string[] = []): string {
     return nodes.flatMap(node => {
-      if (node.kind === 'publication' || node.kind === 'profile') return [];
+      if (node.kind === 'publication' || node.kind === 'profile' || node.kind === 'feed') return [];
       const heading = node.title ? [...path, node.title] : path;
       if (node.kind === 'paper') {
         const description = render(node.body).trim();
