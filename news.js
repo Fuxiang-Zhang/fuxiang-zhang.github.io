@@ -7,5 +7,8 @@ const announcements = [
 ];
 for (const feed of document.querySelectorAll('[data-news-feed]')) {
   const limit = Number(feed.dataset.newsLimit) || announcements.length;
-  feed.innerHTML = announcements.slice(0, limit).join('');
+  // Records read "<date> · <text>"; the date gets its own column so wrapped text stays aligned.
+  feed.innerHTML = announcements.slice(0, limit)
+    .map(item => item.replace(/^<li><p>([A-Z][a-z]{2} \d{1,2}, \d{4}) · /, '<li><time class="news-date">$1</time><p>'))
+    .join('');
 }

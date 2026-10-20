@@ -150,11 +150,68 @@
         margin-bottom: 10px;
     }
 
-    .news-feed { padding-left: 0; list-style: none; }
-    .news-feed > li { margin: 0; }
+    .news-feed {
+      position: relative;
+      margin: 0 0 18px;
+      padding: 0;
+      list-style: none;
+    }
+    .news-feed::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 14px;
+      bottom: 14px;
+      width: 2px;
+      background: linear-gradient(180deg, rgba(41, 128, 185, 0.35), rgba(41, 128, 185, 0.08));
+      border-radius: 1px;
+    }
+    .news-feed > li {
+      position: relative;
+      display: grid;
+      grid-template-columns: 7.2em 1fr;
+      column-gap: 18px;
+      align-items: baseline;
+      margin: 0;
+      padding: 7px 0 7px 26px;
+      line-height: 1.55;
+    }
+    .news-feed > li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: calc(7px + 0.775em - 5px);
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #2980b9;
+      box-sizing: border-box;
+    }
+    .news-feed > li:first-child::before { background: #2980b9; }
+    .news-date {
+      color: #6b7c8f;
+      font-size: 0.92em;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
     .news-feed p { margin: 0; }
     .news-feed li li { margin: .35em 0; }
     .news-year { color: #777; font-size: .9em; margin-left: .5em; }
+    @media (max-width: 720px) {
+      .news-feed > li { grid-template-columns: 1fr; row-gap: 2px; padding: 8px 0 8px 24px; }
+      .news-feed > li::before { top: calc(8px + 0.71em - 5px); }
+    }
+    /* Phones: stack the panels and let the content column shrink to the screen. */
+    @media (max-width: 760px) {
+      body { margin: 16px auto; padding: 0 16px; }
+      .container { display: block; }
+      .left-panel { min-width: 0; padding-right: 0; margin-bottom: 8px; }
+      .right-panel { min-width: 0; }
+      h2 { font-size: 1.6em; margin: 34px 0 18px; }
+      .right-panel a { overflow-wrap: anywhere; }
+      .education-item, .internship-item { flex-wrap: wrap; column-gap: 12px; }
+    }
   </style>
 </head>
 <body>
