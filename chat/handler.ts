@@ -13,6 +13,7 @@ import { stableInstructions, dynamicInstructions, promptCacheKey } from './promp
 import { contextMode, type ContextMode } from './context.js';
 import { preloadPaperIds, getPapers } from './papers.js';
 import { chatDeadline } from '../src/chat-deadline.js';
+import { clientHash, type LogEntry, type LogStore } from './log.js';
 
 export interface ChatEnv {
   site: SiteData;
@@ -30,6 +31,10 @@ export interface ChatEnv {
   perHour?: number;
   /** Total tokens (input + output) per UTC day across all visitors; 0 disables the budget. */
   tokenBudget?: number;
+  /** Question log; omit to record nothing. */
+  logs?: LogStore;
+  /** Secret keying the client hash in the question log. */
+  logSecret?: string;
 }
 
 export { MAX_MESSAGE, MAX_HISTORY, MAX_BODY } from '../src/types.js';
@@ -91,7 +96,7 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   const now = Date.now();
   if (request.method === 'GET' || request.method === 'HEAD') {
-    const status: ChatStatus = { mode: env.openaiKey ? 'live' : 'mock', budget: await currentBudget(env, now) };
+    const status: ChatStatus = { mode: env.openaiKey ? 'live' : 'mock', budget: await currentBudget(env, now), ...(env.openaiKey ? { model: env.model ?? DEFAULT_MODEL } : {}) };
     return json(200, status, cors);
   }
   if (request.method !== 'POST') return json(405, { error: 'Use POST.' }, { ...cors, Allow: 'GET, POST, OPTIONS' });
@@ -100,19 +105,38 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
   const body = await request.text();
   if (new TextEncoder().encode(body).length > MAX_BODY) return json(413, { error: 'Request too large.' }, cors);
   let input: unknown;
-  try { input = JSON.parse(body); } catch { return json(400, { error: 'Invalid JSON.' }, cors); }
-  const parsed = parseChatRequest(input);
-  if (typeof parsed === 'string') return json(400, { error: parsed }, cors);
+  try { input = JSON.parse(body); } catch { input = undefined; }
+  const parsed = input === undefined ? 'Invalid JSON.' : parseChatRequest(input);
+  const model = env.openaiKey ? env.model ?? DEFAULT_MODEL : null;
+  const entry: LogEntry = {
+    time: now, outcome: 'invalid', question: typeof parsed === 'string' ? (isRecord(input) && typeof input.message === 'string' ? input.message : '') : parsed.message,
+    answer: null, error: null, paperId: typeof parsed === 'string' ? null : parsed.paperId ?? null, model,
+    historyTurns: typeof parsed === 'string' ? 0 : parsed.history?.length ?? 0,
+    durationMs: 0, tokens: 0, client: env.logs ? await clientHash(clientAddress(request), env.logSecret ?? '') : '', responseId: null,
+  };
+  const record = (fields: Partial<LogEntry>) => logQuestion(env, { ...entry, durationMs: Date.now() - now, ...fields });
+  if (typeof parsed === 'string') {
+    await record({ error: parsed });
+    return json(400, { error: parsed }, cors);
+  }
 
   if (env.store) {
     const client = await checkClientLimit(env.store, clientAddress(request), env.perHour ?? DEFAULT_PER_HOUR, now);
     if (!client.allowed) {
+      await record({ outcome: 'rate_limited' });
       return json(429, { error: 'Too many questions from this connection. Please try again later.' }, { ...cors, 'Retry-After': String(client.retryAfter) });
     }
   }
-  if (!env.openaiKey) return json(200, mockReply(), cors);
+  if (!env.openaiKey) {
+    const reply = mockReply();
+    await record({ outcome: 'mock', answer: reply.text, responseId: reply.id });
+    return json(200, reply, cors);
+  }
   const budget = await currentBudget(env, now);
-  if (budget?.exhausted) return json(429, { error: BUDGET_MESSAGE, budget }, { ...cors, 'Retry-After': String(secondsUntilReset(now)) });
+  if (budget?.exhausted) {
+    await record({ outcome: 'budget' });
+    return json(429, { error: BUDGET_MESSAGE, budget }, { ...cors, 'Retry-After': String(secondsUntilReset(now)) });
+  }
 
   const paper = parsed.paperId && env.site.publications.some(paper => paper.id === parsed.paperId) ? parsed.paperId : null;
   const turns: ChatTurn[] = [...(parsed.history ?? []), { role: 'user', text: parsed.message }];
@@ -128,13 +152,14 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
       const send = (event: ChatStreamEvent) => {
         if (!closed) controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
       };
+      let partial = '';
       const task = (async () => {
         try {
           const reply = await askModel({
             apiKey: env.openaiKey!, model: env.model, instructions: stableInstructions(env.site, mode), dynamic, turns,
             paperSite: mode === 'selective' ? env.site : undefined,
             cacheKey: promptCacheKey(env.site, env.model ?? DEFAULT_MODEL, mode),
-            signal: deadline.signal, onDelta: text => send({ type: 'delta', text }),
+            signal: deadline.signal, onDelta: text => { partial += text; send({ type: 'delta', text }); },
           });
           const usage = await accountUsage(env, { requests: 1, ...reply.usage }, now, reply.id);
           const response: ChatReply = {
@@ -142,13 +167,19 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
             ...(budget && usage ? { budget: budgetStatus(usage, budget.limit, now) } : {}),
           };
           send({ type: 'done', reply: response });
+          await record({ outcome: 'answered', answer: reply.answer, tokens: reply.usage.total, responseId: reply.id });
         } catch (error) {
           const aborted = deadline.signal.aborted;
+          const message = error instanceof Error ? error.message : String(error);
           console.error('chat: model request failed:', {
             kind: aborted ? deadline.signal.reason?.name : error instanceof ModelReplyError ? 'model_reply' : 'upstream',
-            message: error instanceof Error ? error.message : String(error),
+            message,
           });
           await accountUsage(env, { errors: 1, ...(error instanceof ModelReplyError ? error.usage : {}) }, now);
+          await record({
+            outcome: !aborted ? 'error' : deadline.signal.reason?.name === 'TimeoutError' ? 'timeout' : 'cancelled',
+            answer: partial || null, error: message, tokens: error instanceof ModelReplyError ? error.usage.total ?? 0 : 0,
+          });
           send({ type: 'error', status: 502, error: aborted && deadline.signal.reason?.name === 'TimeoutError'
             ? 'The answer timed out. Please try again.'
             : 'The assistant is unavailable right now. Please try again in a moment.' });
@@ -170,6 +201,15 @@ async function respond(request: Request, env: ChatEnv): Promise<Response> {
     ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8',
     'Cache-Control': 'no-store, no-transform', 'X-Content-Type-Options': 'nosniff',
   } });
+}
+
+/** A log write failure must never change the visitor's response. */
+async function logQuestion(env: ChatEnv, entry: LogEntry): Promise<void> {
+  if (!env.logs) return;
+  try { await env.logs.write(entry); }
+  catch (error) {
+    console.error('chat: question log failed:', { outcome: entry.outcome, message: error instanceof Error ? error.message : String(error) });
+  }
 }
 
 /** A ledger write failure must not discard a generated answer or mask the model error.

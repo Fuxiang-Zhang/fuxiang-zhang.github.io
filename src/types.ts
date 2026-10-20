@@ -95,7 +95,9 @@ export type ChatStreamEvent =
   | { type: 'done'; reply: ChatReply }
   | { type: 'error'; error: string; status: number };
 /** Answer to GET /api/chat: what kind of replies to expect and whether the budget allows questions right now. */
-export interface ChatStatus { mode: ChatMode; budget: BudgetStatus | null }
+/** `model` names the live model; absent for mock replies. */
+/** `model` names the live model; absent for mock replies. */
+export interface ChatStatus { mode: ChatMode; budget: BudgetStatus | null; model?: string }
 export interface AssistantMessage {
   id: string; role: 'assistant'; text: string; prompt: string; paperId: string | null;
   state: 'pending' | 'done' | 'error' | 'stopped';

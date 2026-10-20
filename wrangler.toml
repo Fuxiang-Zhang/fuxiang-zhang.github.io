@@ -1,6 +1,7 @@
 # Cloudflare Worker that serves POST /api/chat for the GitHub Pages homepage.
 # Deploy: npm run worker:deploy   (needs `npx wrangler login` once, or CLOUDFLARE_API_TOKEN)
-# Secret: npx wrangler secret put OPENAI_API_KEY
+# Secrets: npx wrangler secret put OPENAI_API_KEY
+#          npx wrangler secret put ADMIN_TOKEN   (password for the question log at /admin)
 name = "fuxiang-homepage-chat"
 main = "worker/index.ts"
 compatibility_date = "2026-06-01"
@@ -16,7 +17,7 @@ fallthrough = true
 enabled = true
 
 [vars]
-OPENAI_MODEL = "gpt-5.6-terra"
+OPENAI_MODEL = "gpt-6-luna"
 # Set full to restore the complete homepage context without paper tools.
 CHAT_CONTEXT_MODE = "selective"
 # Exact browser origins allowed to call the API, comma-separated.
@@ -34,6 +35,15 @@ class_name = "ChatCounters"
 [[migrations]]
 tag = "v1-chat-counters"
 new_sqlite_classes = ["ChatCounters"]
+
+# Question log: one SQLite Durable Object, rows pruned after 90 days.
+[[durable_objects.bindings]]
+name = "CHAT_LOG"
+class_name = "ChatLog"
+
+[[migrations]]
+tag = "v2-chat-log"
+new_sqlite_classes = ["ChatLog"]
 
 # Read-only migration source: existing records are imported once per ledger key.
 # Keep this binding during migration; new writes go to CHAT_COUNTERS.

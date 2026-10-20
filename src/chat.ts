@@ -200,5 +200,5 @@ export async function requestStatus(endpoint: string | null, signal?: AbortSigna
   if (!response.ok) throw new Error(`Chat status failed (${response.status}).`);
   const data: unknown = await response.json();
   if (!isRecord(data) || (data.mode !== 'mock' && data.mode !== 'live')) throw new Error('Invalid chat status.');
-  return { mode: data.mode, budget: parseBudget(data.budget) };
+  return { mode: data.mode, budget: parseBudget(data.budget), ...(typeof data.model === 'string' && data.model ? { model: data.model.slice(0, 80) } : {}) };
 }

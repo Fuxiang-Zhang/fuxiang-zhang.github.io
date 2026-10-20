@@ -159,11 +159,14 @@ function startReveal(id: string, body: HTMLElement, followLatest: boolean) {
     if (!reveals.size) scrollArea.style.scrollBehavior = '';
   });
 }
+/** The live model's name, as reported by the backend. */
+let chatModel: string | undefined;
 /** The status bar names the reply source: the configured backend until the backend reports, then what it actually returned. */
 function renderChatMode(mode = chatMode) {
   chatMode = mode;
-  $('#chat-mode').textContent = t(budget?.exhausted ? 'chatBudget'
+  const label = t(budget?.exhausted ? 'chatBudget'
     : mode === 'live' ? 'chatLive' : mode === 'mock' ? 'chatMock' : siteConfig.chatEndpoint ? 'chatConnected' : 'chatMock');
+  $('#chat-mode').textContent = mode === 'live' && chatModel ? `${label} · ${chatModel}` : label;
 }
 const budgetText = (status: BudgetStatus) => t('budgetNotice').replace('{time}',
   new Date(status.resetsAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' }));
@@ -182,7 +185,7 @@ function applyBudget(status: BudgetStatus | null | undefined) {
 }
 const budgetMonitor = createBudgetMonitor(
   () => requestStatus(siteConfig.chatEndpoint),
-  status => { chatMode = status.mode; renderBudget(status.budget); },
+  status => { chatMode = status.mode; chatModel = status.model; renderBudget(status.budget); },
 );
 function renderTheme() {
   document.documentElement.dataset.theme = theme;

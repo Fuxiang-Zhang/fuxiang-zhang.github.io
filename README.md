@@ -263,7 +263,7 @@ Browser and backend chat calls share a 60-second total deadline (`CHAT_TIMEOUT_M
 
 ### Model call
 
-`chat/openai.ts` uses the streaming OpenAI Responses API with low verbosity, low reasoning effort, a 4096-token output limit per response, and `store: false`. `OPENAI_MODEL` defaults to `gpt-5.6-terra`. Stable developer instructions and reference material precede a separate dynamic developer message and conversation history. Recognized GPT-5.6+ model names use `prompt_cache_options: { mode: "explicit", ttl: "30m" }` and a breakpoint on the stable block. Unknown/custom or earlier model names omit these model-specific settings and use provider defaults. The cache key identifies the stable content and model; it does not guarantee a hit or retention.
+`chat/openai.ts` uses the streaming OpenAI Responses API with low verbosity, low reasoning effort, a 4096-token output limit per response, and `store: false`. `OPENAI_MODEL` defaults to `gpt-6-luna`; the status response reports it and the status bar shows it next to `chat: live`. Stable developer instructions and reference material precede a separate dynamic developer message and conversation history. Recognized GPT-5.6+ model names use `prompt_cache_options: { mode: "explicit", ttl: "30m" }` and a breakpoint on the stable block. Unknown/custom or earlier model names omit these model-specific settings and use provider defaults. The cache key identifies the stable content and model; it does not guarantee a hit or retention.
 
 `CHAT_CONTEXT_MODE=selective` is the default in the local server and Worker. `chat/context.ts` projects profile, experience, research and a complete publication index from `SiteData`, preserving authored contributions and roles while excluding full abstracts and presentation fields. `chat/papers.ts` preloads explicitly named papers by ID, full title or curated alias; otherwise the selected paper provides context for ambiguous questions. The model can batch missing details through `get_papers({ids})`. Details are homepage metadata and abstracts, not fetched full papers. At most two lookup rounds and three model responses share the original 60-second deadline. The last response disables tools; continuation preserves function call IDs and encrypted reasoning. Tool definitions stay unchanged across rounds.
 
@@ -305,7 +305,7 @@ Odd spacing and capitals inside a marker still resolve. A marker whose id is unk
 | `ALLOWED_ORIGINS` | The homepage and local port 3000 | Browser origins allowed to call the API; others get 403 |
 | `RATE_PER_HOUR` | `20` | Questions per IP (stored hashed) per hour |
 | `TOKEN_BUDGET_PER_DAY` | `9900000` | Site-wide token cap per UTC day (input plus output); `0` disables it |
-| `OPENAI_MODEL` | `gpt-5.6-terra` | Model to use |
+| `OPENAI_MODEL` | `gpt-6-luna` | Model to use |
 
 Hourly counts and the `usage:YYYY-MM-DD` ledger are updated atomically in SQLite-backed Durable Objects, with one object per counter key. Daily records expire after 90 days. The local Node server uses an atomic in-memory store and the same handler. `requests` counts successful replies; `errors` counts failed user requests. `modelCalls` counts attempted provider calls across all tool rounds; `cacheWrite` records provider cache-write tokens. `incompleteUsage` counts attempts for which final provider usage was unavailable, so unknown charges are not represented as measured zero. Old ledger records default the new fields to zero. `reasoning` is the share of `output` the model spent thinking before the visible answer; `cached` is the share of `input` served from the provider's prompt cache. When an incomplete, refused or empty reply includes provider usage, those tokens are also recorded. If a later tool round fails, known usage from earlier rounds is still recorded once. Unknown usage cannot be reconstructed locally. Structured `chat: model usage` logs include model, context mode, response ID, cumulative usage, first text latency and total duration, without question or answer text. Token counters are not a dollar-cost estimate: apply the model’s current input, cache-read, cache-write and output pricing to these measurements; reasoning is already included in output. Storage failures return 503 instead of silently resetting the budget.
 
@@ -314,6 +314,20 @@ Usage-write failures are logged with the known token delta, UTC day and response
 Each question checks the recorded daily total before calling the model. Calls already in flight can finish after the threshold is reached, so this is a stop threshold, not an exact token reservation. Without `OPENAI_API_KEY`, the backend returns a labelled mock reply. `TOKEN_BUDGET_PER_DAY=0` disables budget enforcement in both local and Worker environments; malformed numeric settings use the documented code defaults (9,500,000 tokens when no valid override is supplied).
 
 The first access to each new Durable Object imports the corresponding legacy `CHAT_KV` value once, then writes only to Durable Object storage. Keep the old binding during migration. For the first rollout, allow old in-flight calls to finish before the new ledger is used (or switch after a quiet UTC reset); a KV update that arrives after import cannot be recovered automatically. Historical KV records remain in the old namespace.
+
+### Question log
+
+Every chat question is recorded with its outcome, whether it was answered or not: `answered`, `mock`, `error`, `timeout`, `cancelled` (the visitor stopped or left), `rate_limited`, `budget` or `invalid`. A record holds the question, the reply (or the partial text streamed before a failure), the server-side error, the selected paper, the model, the number of earlier turns, the duration, the tokens used and the provider response ID. Visitors are identified only by a short HMAC of their address keyed with `ADMIN_TOKEN`, so the raw IP is never stored and hashes cannot be reversed by enumerating addresses. The composer tells visitors that questions are logged.
+
+`chat/log.ts` defines the record and an in-memory store for the local server and tests; `worker/log.ts` stores it in one SQLite Durable Object (`CHAT_LOG`, migration `v2-chat-log`) that deletes records older than 90 days once a day. A log write that fails is reported with `console.error` and never changes the visitor's response.
+
+To read the log, set a long random admin token as a Worker secret and open `/admin` on the Worker's address:
+
+```bash
+npx wrangler secret put ADMIN_TOKEN
+```
+
+The page asks for the token, lists questions newest first with a 24-hour count per outcome, and filters by outcome. Its data comes from `GET /api/chat/logs` with `Authorization: Bearer <ADMIN_TOKEN>`. Without `ADMIN_TOKEN`, all three paths answer 404. Locally, start the server with `ADMIN_TOKEN` set (for example in `.env`) and open `http://127.0.0.1:3000/admin`; the local log lasts until the server stops.
 
 Limitation: the origin check only stops other web pages. A script can forge the origin and call the endpoint directly, so the real safeguards are the daily token budget and a monthly spending limit set in the OpenAI dashboard. Cloudflare Turnstile can be added if scripted calls need to be blocked.
 

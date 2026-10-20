@@ -7,6 +7,8 @@ import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleChat, DEFAULT_TOKEN_BUDGET, type ChatEnv } from './chat/handler.js';
 import { MemoryStore, numericSetting } from './chat/limits.js';
+import { ADMIN_PATHS, handleAdmin } from './chat/admin.js';
+import { MemoryLogStore } from './chat/log.js';
 import { loadSiteData } from './src/markdown.js';
 import { MAX_BODY, type SiteData } from './src/types.js';
 
@@ -36,6 +38,7 @@ function json(res: http.ServerResponse, status: number, value: unknown) {
  */
 export function createServer(publicRoot = root) {
   const store = new MemoryStore();
+  const logs = new MemoryLogStore();
   let site: Promise<SiteData> | undefined;
   async function chatEnv(host = 'localhost'): Promise<ChatEnv> {
     site ??= loadSiteData(path => readFile(join(publicRoot, path), 'utf8'));
@@ -48,6 +51,8 @@ export function createServer(publicRoot = root) {
       store,
       perHour: 200,
       tokenBudget: numericSetting(process.env.TOKEN_BUDGET_PER_DAY, DEFAULT_TOKEN_BUDGET),
+      logs,
+      logSecret: process.env.ADMIN_TOKEN,
     };
   }
 
@@ -56,6 +61,14 @@ export function createServer(publicRoot = root) {
     let pathname: string;
     try { pathname = decodeURIComponent(new URL(req.url || '/', 'http://localhost').pathname); }
     catch { return json(res, 400, { error: 'Invalid URL.' }); }
+    if (ADMIN_PATHS.includes(pathname)) {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(req.headers)) if (typeof value === 'string') headers.set(name, value);
+      const response = await handleAdmin(new Request(`http://${req.headers.host ?? 'localhost'}${req.url}`, { method: req.method, headers }),
+        { logs, adminToken: process.env.ADMIN_TOKEN || undefined });
+      res.writeHead(response.status, Object.fromEntries(response.headers));
+      return res.end(await response.text());
+    }
     if (pathname === '/api/chat') {
       const controller = new AbortController();
       const disconnect = () => { if (!res.writableFinished) controller.abort(); };

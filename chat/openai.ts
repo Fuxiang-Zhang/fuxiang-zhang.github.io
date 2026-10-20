@@ -8,7 +8,7 @@ import type { SiteData } from '../src/types.js';
 import { paperTool, executePaperTool } from './papers.js';
 import { CHAT_TIMEOUT_MS, MAX_REPLY, type ChatTurn } from '../src/types.js';
 
-export const DEFAULT_MODEL = 'gpt-5.6-terra';
+export const DEFAULT_MODEL = 'gpt-6-luna';
 
 /** `reasoning` tokens are part of `output`; they are billed but never shown. */
 export interface ModelUsage { input: number; cached: number; output: number; reasoning: number; total: number; cacheWrite?: number; modelCalls?: number; incompleteUsage?: number }
