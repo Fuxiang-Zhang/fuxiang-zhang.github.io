@@ -33,7 +33,7 @@ Summary: Print all news and paper acceptances
 
 - Oct 14, 2026 · **Open source**: [MaaPilot](https://github.com/mansicer/MaaPilot), Arknights account orchestration built on MAA (in development).
 - Oct 13, 2026 · **Open source**: [tsuji](https://github.com/mansicer/tsuji), live bilingual subtitles in the browser with OpenAI Realtime speech recognition and GPT translation.
-- Sep 25, 2026 · **NeurIPS 2026**: [NOPO](#card/negative-only-policy-optimization) & [WLTS](#card/width-limited-tree-search) (Spotlight), [Dr. MAS](#card/dr-mas) (Poster). Thanks to all the co-authors!
+- Sep 25, 2026 · **NeurIPS 2026**: [NOPO](#card/negative-only-policy-optimization) & [WLTS](#card/width-limited-tree-search) (Spotlight), [Dr. MAS](#card/dr-mas). Thanks to all the co-authors!
 - Aug 21, 2026 · **EMNLP 2026 Findings**: [TCS](#card/two-stage-test-generation) accepted. Thanks to all the co-authors!
 
 ## Research
